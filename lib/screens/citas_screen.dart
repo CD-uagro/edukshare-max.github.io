@@ -31,6 +31,11 @@ class _CitasScreenState extends State<CitasScreen> {
         title: const Text('Mis Citas Médicas'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.delete_sweep),
+            tooltip: 'Limpiar citas pasadas',
+            onPressed: () => _limpiarCitasPasadas(context),
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () async {
               print('🔄 Refresh manual de citas...');
@@ -264,4 +269,76 @@ class _CitasScreenState extends State<CitasScreen> {
     
     return '${fecha.day} de ${months[fecha.month - 1]} ${fecha.year}';
   }
+
+
+  void _limpiarCitasPasadas(BuildContext context) {
+    final session = context.read<SessionProvider>();
+    final citasPasadas = session.citas.where((cita) {
+      try {
+        final fechaCita = DateTime.parse(cita.inicio);
+        return fechaCita.isBefore(DateTime.now());
+      } catch (e) {
+        return false;
+      }
+    }).toList();
+
+    if (citasPasadas.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay citas pasadas para limpiar'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.delete_sweep, color: Colors.orange),
+            SizedBox(width: 12),
+            Text('Limpiar Citas Pasadas'),
+          ],
+        ),
+        content: Text(
+          '¿Deseas eliminar ${citasPasadas.length} cita(s) pasada(s) de tu lista?\n\n'
+          'Esta acción solo limpiará la visualización local, las citas seguirán en el historial médico.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Se limpiaron ${citasPasadas.length} cita(s) pasada(s)'),
+                  backgroundColor: Colors.green,
+                  action: SnackBarAction(
+                    label: 'Recargar',
+                    textColor: Colors.white,
+                    onPressed: () => session.loadCitas(),
+                  ),
+                ),
+              );
+
+              session.loadCitas();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            icon: const Icon(Icons.delete_sweep),
+            label: const Text('Limpiar'),
+          ),
+        ],
+      ),
+    );
+  }
+
 }

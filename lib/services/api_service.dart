@@ -8,6 +8,7 @@ import 'package:carnet_digital_uagro/models/carnet_model.dart';
 import 'package:carnet_digital_uagro/models/cita_model.dart';
 import 'package:carnet_digital_uagro/models/promocion_salud_model.dart';
 import 'package:carnet_digital_uagro/models/vacuna_model.dart';
+import 'package:carnet_digital_uagro/models/consulta_model.dart';
 
 class ApiService {
   // 🌐 BACKEND PRODUCCIÓN EN RENDER
@@ -565,4 +566,74 @@ class ApiService {
       return [];
     }
   }
+  // 📋 OBTENER CONSULTAS MÉDICAS DEL ESTUDIANTE - CON REINTENTOS
+  static Future<List<ConsultaModel>> getConsultas(String token) async {
+    final result = await _retryWithBackoff<List<ConsultaModel>>(
+      () => _performGetConsultas(token),
+      maxAttempts: maxRetries,
+      operationName: 'obtener consultas médicas',
+    );
+    return result ?? [];
+  }
+
+  // 📋 IMPLEMENTACIÓN DE OBTENCIÓN DE CONSULTAS MÉDICAS
+  static Future<List<ConsultaModel>> _performGetConsultas(String token) async {
+    try {
+      final url = Uri.parse('$baseUrl/me/consultas');
+      
+      print('🔍 GET CONSULTAS REQUEST: $url');
+      print('🔑 TOKEN: ${token.substring(0, 20)}...');
+      
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      ).timeout(
+        normalTimeout,
+        onTimeout: () {
+          throw Exception('TIMEOUT: Timeout obteniendo consultas médicas');
+        },
+      );
+      
+      print('📊 CONSULTAS RESPONSE: ${response.statusCode}');
+      print('📋 RESPONSE BODY: ${response.body}');
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        if (data['success'] == true && data['data'] != null) {
+          final List<dynamic> consultasJson = data['data'];
+          final consultas = consultasJson.map((json) => ConsultaModel.fromJson(json)).toList();
+          print('✅ CONSULTAS OBTENIDAS: ${consultas.length} registros');
+          return consultas;
+        } else {
+          print('⚠️ RESPUESTA SIN DATOS DE CONSULTAS');
+          return [];
+        }
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        print('🚫 Token inválido detectado - limpiando sesión');
+        throw Exception('INVALID_TOKEN: Token inválido o expirado');
+      } else if (response.statusCode == 404) {
+        print('📭 No hay consultas médicas registradas');
+        return [];
+      } else {
+        print('❌ ERROR HTTP: ${response.statusCode}');
+        return [];
+      }
+      
+    } catch (e) {
+      print('❌ GET CONSULTAS ERROR: $e');
+      
+      // Si es error de token, propagarlo
+      if (e.toString().contains('INVALID_TOKEN')) {
+        rethrow;
+      }
+      
+      // Para otros errores, retornar lista vacía
+      return [];
+    }
+  }
+
 }

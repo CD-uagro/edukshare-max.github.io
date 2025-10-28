@@ -519,47 +519,53 @@ class SessionProvider extends ChangeNotifier {
           print('     Categoría: ${p.categoria}');
         }
         
-        // Filtrar promociones autorizadas
-        final autorizadas = promocionesApi.where((p) => p.autorizado == true).toList();
-        
-        print('✅ Promociones autorizadas: ${autorizadas.length}');
-        
-        // Filtrar por destinatario según la lógica de Cosmos DB:
-        // 1. destinatario="general" → Para TODOS los usuarios (SIEMPRE)
-        // 2. destinatario="alumno" + matricula="" → Para TODOS los alumnos
-        // 3. destinatario="alumno" + matricula="15662" → SOLO para esa matrícula
+        // NUEVA LÓGICA: Las promociones individuales NO requieren autorización
+        // - destinatario="general" + autorizado=true → Para TODOS
+        // - destinatario="alumno" + matricula="" + autorizado=true → Para TODOS los alumnos
+        // - destinatario="alumno" + matricula="XXXX" → Para ese alumno (SIN requerir autorización)
         
         print('🔍 FILTRANDO PROMOCIONES PARA MATRÍCULA: $matricula');
         
-        _promociones = autorizadas.where((p) {
+        _promociones = promocionesApi.where((p) {
           final destinatarioLower = p.destinatario.toLowerCase().trim();
           final matriculaPromo = p.matricula?.trim() ?? '';
           
           print('🔎 Evaluando promoción ${p.id}:');
           print('   Destinatario: "$destinatarioLower"');
           print('   Matrícula promo: "$matriculaPromo"');
+          print('   Autorizado: ${p.autorizado}');
           
-          // Caso 1: Promoción GENERAL (para todos) - SIEMPRE SE INCLUYE
+          // Caso 1: Promoción GENERAL (para todos) - REQUIERE AUTORIZACIÓN
           if (destinatarioLower == 'general') {
-            print('   ✅ INCLUIDA: Es GENERAL (para todos los usuarios)');
-            return true;
+            if (p.autorizado) {
+              print('   ✅ INCLUIDA: Es GENERAL autorizada (para todos los usuarios)');
+              return true;
+            } else {
+              print('   ❌ EXCLUIDA: Es GENERAL pero no autorizada');
+              return false;
+            }
           }
           
           // Caso 2: destinatario="alumno"
           if (destinatarioLower == 'alumno') {
-            // Si tiene matrícula específica, verificar que coincida
+            // Si tiene matrícula específica, verificar que coincida (NO requiere autorización)
             if (matriculaPromo.isNotEmpty) {
               if (matriculaPromo == matricula) {
-                print('   ✅ INCLUIDA: ALUMNO ESPECÍFICO (matrícula coincide: $matricula)');
+                print('   ✅ INCLUIDA: ALUMNO ESPECÍFICO (matrícula coincide: $matricula, no requiere autorización)');
                 return true;
               } else {
                 print('   ❌ EXCLUIDA: Es para otro alumno ($matriculaPromo ≠ $matricula)');
                 return false;
               }
             } else {
-              // Sin matrícula = para todos los alumnos
-              print('   ✅ INCLUIDA: Para TODOS LOS ALUMNOS (sin matrícula específica)');
-              return true;
+              // Sin matrícula = para todos los alumnos (REQUIERE autorización)
+              if (p.autorizado) {
+                print('   ✅ INCLUIDA: Para TODOS LOS ALUMNOS (autorizada)');
+                return true;
+              } else {
+                print('   ❌ EXCLUIDA: Para todos los alumnos pero no autorizada');
+                return false;
+              }
             }
           }
           

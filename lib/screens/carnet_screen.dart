@@ -11,6 +11,7 @@ import 'package:carnet_digital_uagro/models/carnet_model.dart';
 import 'package:carnet_digital_uagro/models/promocion_salud_model.dart';
 import 'package:carnet_digital_uagro/theme/uagro_theme.dart';
 import 'package:carnet_digital_uagro/screens/citas_screen.dart';
+import 'package:carnet_digital_uagro/screens/consultas_screen.dart';
 import 'dart:ui';
 import 'dart:typed_data';
 import 'dart:html' as html;
@@ -127,6 +128,17 @@ class _CarnetScreenState extends State<CarnetScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.assignment_outlined),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const ConsultasScreen(),
+                ),
+              );
+            },
+            tooltip: 'Mis Consultas',
+          ),
           IconButton(
             icon: const Icon(Icons.medical_services_outlined),
             onPressed: () {
@@ -3859,6 +3871,27 @@ class _CarnetScreenState extends State<CarnetScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const CitasScreen()),
+              );
+            },
+          ),
+
+          // 📋 CONSULTAS MÉDICAS
+          ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.assignment, color: Colors.blue.shade600, size: 20),
+            ),
+            title: const Text('Mis Consultas'),
+            subtitle: const Text('Historial de atención médica'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ConsultasScreen()),
               );
             },
           ),
