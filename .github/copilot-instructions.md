@@ -77,14 +77,17 @@ Display errors using `session.error` and `session.errorType` in UI.
 - `destinatario="general"` + `autorizado=true` → All users
 - `destinatario="alumno"` + `matricula="XXXX"` → Specific student (NO authorization required)
 - `destinatario="alumno"` + empty `matricula` + `autorizado=true` → All students
+- **Time filter**: Only shows promotions from last 7 days (based on `createdAt`)
 
 **Frontend Filter** (`lib/providers/session_provider.dart:loadPromociones()`):
 - Additional client-side validation for security
 - Same logic as backend
+- Double-checks 7-day expiration
 
 **CRITICAL RULES:**
 - Individual promotions (specific matricula) do NOT require `autorizado: true`
 - General promotions and bulk student promotions MUST have `autorizado: true`
+- **All promotions expire after 7 days** from `createdAt` date
 
 ## Integration Points
 

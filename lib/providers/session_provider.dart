@@ -574,7 +574,23 @@ class SessionProvider extends ChangeNotifier {
           return false;
         }).toList();
         
-        print('🎯 Promociones filtradas para mostrar: ${_promociones.length}');
+        // FILTRO ADICIONAL: Solo promociones de los últimos 7 días
+        final ahora = DateTime.now();
+        final hace7Dias = ahora.subtract(const Duration(days: 7));
+        
+        _promociones = _promociones.where((p) {
+          final diasDesdeCreacion = ahora.difference(p.createdAt).inDays;
+          
+          if (diasDesdeCreacion <= 7) {
+            print('   ✅ Promoción ${p.id} vigente (${diasDesdeCreacion} días)');
+            return true;
+          } else {
+            print('   ⏰ Promoción ${p.id} expirada (${diasDesdeCreacion} días > 7)');
+            return false;
+          }
+        }).toList();
+        
+        print('🎯 Promociones filtradas para mostrar (últimos 7 días): ${_promociones.length}');
       }
       
     } catch (e, stackTrace) {
