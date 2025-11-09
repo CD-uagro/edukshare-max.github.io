@@ -360,7 +360,39 @@ class SessionProvider extends ChangeNotifier {
     _setLoading(false);
   }
 
-  // 💉 CARGAR VACUNAS - BACKEND REAL SASU
+  // �️ ELIMINAR CITAS PASADAS
+  Future<Map<String, dynamic>> eliminarCitasPasadas() async {
+    if (_token == null) {
+      return {
+        'success': false,
+        'errorType': 'NO_TOKEN',
+        'message': 'No hay token de autenticación',
+      };
+    }
+
+    try {
+      print('🗑️ Eliminando citas pasadas...');
+      final resultado = await ApiService.deleteCitasPasadas(_token!);
+      
+      if (resultado['success'] == true) {
+        print('✅ Citas pasadas eliminadas: ${resultado['eliminadas']}');
+      } else {
+        print('❌ Error eliminando citas: ${resultado['message']}');
+      }
+      
+      return resultado;
+      
+    } catch (e) {
+      print('❌ ERROR ELIMINANDO CITAS PASADAS: $e');
+      return {
+        'success': false,
+        'errorType': 'ERROR',
+        'message': 'Error: $e',
+      };
+    }
+  }
+
+  // �💉 CARGAR VACUNAS - BACKEND REAL SASU
   Future<void> _loadVacunasData() async {
     if (_token == null) return;
 

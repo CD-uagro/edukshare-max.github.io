@@ -271,7 +271,7 @@ class _CitasScreenState extends State<CitasScreen> {
   }
 
 
-  void _limpiarCitasPasadas(BuildContext context) {
+  void _limpiarCitasPasadas(BuildContext context) async {
     final session = context.read<SessionProvider>();
     final citasPasadas = session.citas.where((cita) {
       try {
@@ -303,8 +303,8 @@ class _CitasScreenState extends State<CitasScreen> {
           ],
         ),
         content: Text(
-          '¿Deseas eliminar ${citasPasadas.length} cita(s) pasada(s) de tu lista?\n\n'
-          'Esta acción solo limpiará la visualización local, las citas seguirán en el historial médico.',
+          '¿Deseas eliminar ${citasPasadas.length} cita(s) pasada(s)?\n\n'
+          'Esta acción eliminará permanentemente las citas caducadas de tu carnet.',
         ),
         actions: [
           TextButton(
@@ -312,29 +312,68 @@ class _CitasScreenState extends State<CitasScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton.icon(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
               
+              // Mostrar indicador de carga
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Se limpiaron ${citasPasadas.length} cita(s) pasada(s)'),
-                  backgroundColor: Colors.green,
-                  action: SnackBarAction(
-                    label: 'Recargar',
-                    textColor: Colors.white,
-                    onPressed: () => session.loadCitas(),
+                const SnackBar(
+                  content: Row(
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      Text('Eliminando citas pasadas...'),
+                    ],
                   ),
+                  duration: Duration(seconds: 10),
                 ),
               );
-
-              session.loadCitas();
+              
+              // Llamar al método del provider para eliminar
+              final resultado = await session.eliminarCitasPasadas();
+              
+              // Ocultar snackbar de carga
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              
+              // Mostrar resultado
+              if (resultado['success'] == true) {
+                final eliminadas = resultado['eliminadas'] ?? 0;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('✅ Se eliminaron $eliminadas cita(s) pasada(s)'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+                
+                // Recargar citas
+                await session.loadCitas();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('❌ ${resultado['message'] ?? 'Error eliminando citas'}'),
+                    backgroundColor: Colors.red,
+                    action: SnackBarAction(
+                      label: 'Reintentar',
+                      textColor: Colors.white,
+                      onPressed: () => _limpiarCitasPasadas(context),
+                    ),
+                  ),
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.orange,
               foregroundColor: Colors.white,
             ),
             icon: const Icon(Icons.delete_sweep),
-            label: const Text('Limpiar'),
+            label: const Text('Eliminar'),
           ),
         ],
       ),

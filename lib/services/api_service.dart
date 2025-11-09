@@ -368,6 +368,60 @@ class ApiService {
     }
   }
 
+  // 🗑️ ELIMINAR CITAS PASADAS
+  static Future<Map<String, dynamic>> deleteCitasPasadas(String token) async {
+    try {
+      final url = Uri.parse('$baseUrl/me/citas/pasadas');
+      
+      print('🔍 DELETE CITAS PASADAS REQUEST: $url');
+      
+      final response = await http.delete(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      ).timeout(
+        normalTimeout,
+        onTimeout: () {
+          throw Exception('TIMEOUT: Timeout eliminando citas pasadas');
+        },
+      );
+      
+      print('📊 DELETE CITAS RESPONSE: ${response.statusCode}');
+      print('📋 RESPONSE BODY: ${response.body}');
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'eliminadas': data['eliminadas'] ?? 0,
+          'message': data['message'] ?? 'Citas eliminadas correctamente',
+        };
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        return {
+          'success': false,
+          'errorType': 'INVALID_TOKEN',
+          'message': 'Token inválido o expirado',
+        };
+      } else {
+        return {
+          'success': false,
+          'errorType': 'SERVER_ERROR',
+          'message': 'Error eliminando citas pasadas',
+        };
+      }
+      
+    } catch (e) {
+      print('❌ DELETE CITAS PASADAS ERROR: $e');
+      return {
+        'success': false,
+        'errorType': 'NETWORK',
+        'message': 'Error de conexión: $e',
+      };
+    }
+  }
+
   // 🏥 OBTENER PROMOCIONES DE SALUD ACTIVAS - BACKEND REAL
   static Future<List<PromocionSaludModel>> getPromocionesSalud(String token, String matricula) async {
     try {
