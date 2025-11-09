@@ -1,5 +1,6 @@
-// 📋 PANTALLA DE HISTORIAL DE CONSULTAS MÉDICAS
-// Muestra las consultas médicas del alumno con nombre, matrícula y diagnóstico
+// 📋 PANTALLA DE HISTORIAL DE VISITAS A SERVICIOS MÉDICOS
+// Muestra el registro de visitas del alumno (fecha, hora, departamento, médico)
+// NOTA: Diagnóstico y observaciones NO se muestran por confidencialidad
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -240,14 +241,14 @@ class _ConsultasScreenState extends State<ConsultasScreen> {
                 ],
               ),
               const Divider(height: 24),
-              // Información del paciente
+              // Información del paciente (SIN diagnóstico - confidencial)
               _buildInfoRow(Icons.person, 'Nombre', consulta.nombreCompleto),
               const SizedBox(height: 8),
               _buildInfoRow(Icons.badge, 'Matrícula', consulta.matricula),
               const SizedBox(height: 8),
-              _buildInfoRow(Icons.description, 'Diagnóstico', consulta.diagnostico),
+              _buildInfoRow(Icons.business, 'Departamento de atención', consulta.departamento),
               const SizedBox(height: 8),
-              _buildInfoRow(Icons.local_hospital, 'Médico', consulta.medico),
+              _buildInfoRow(Icons.person_outline, 'Responsable de atención', consulta.medico),
             ],
           ),
         ),
@@ -326,11 +327,9 @@ class _ConsultasScreenState extends State<ConsultasScreen> {
               _buildDetailItem('Nombre Completo', consulta.nombreCompleto),
               _buildDetailItem('Matrícula', consulta.matricula),
               _buildDetailItem('Tipo de Consulta', consulta.tipo),
-              _buildDetailItem('Diagnóstico', consulta.diagnostico),
-              _buildDetailItem('Médico', consulta.medico),
-              _buildDetailItem('Departamento', consulta.departamento),
-              if (consulta.observaciones.isNotEmpty)
-                _buildDetailItem('Observaciones', consulta.observaciones),
+              _buildDetailItem('Departamento de atención', consulta.departamento),
+              _buildDetailItem('Responsable de atención', consulta.medico),
+              // Diagnóstico y observaciones removidos por confidencialidad
             ],
           ),
         ),
