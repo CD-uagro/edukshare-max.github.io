@@ -8,6 +8,7 @@ import 'package:carnet_digital_uagro/models/carnet_model.dart';
 import 'package:carnet_digital_uagro/models/cita_model.dart';
 import 'package:carnet_digital_uagro/models/promocion_salud_model.dart';
 import 'package:carnet_digital_uagro/models/vacuna_model.dart';
+import 'package:carnet_digital_uagro/models/consulta_model.dart';
 import 'package:carnet_digital_uagro/services/api_service.dart';
 
 class SessionProvider extends ChangeNotifier {
@@ -21,6 +22,7 @@ class SessionProvider extends ChangeNotifier {
   List<CitaModel> _citas = [];
   List<PromocionSaludModel> _promociones = [];
   List<VacunaModel> _vacunas = [];
+  List<ConsultaModel> _consultas = [];
   
   // Estado del backend
   bool _backendHealthy = true;
@@ -37,6 +39,7 @@ class SessionProvider extends ChangeNotifier {
   List<CitaModel> get citas => _citas;
   List<PromocionSaludModel> get promociones => _promociones;
   List<VacunaModel> get vacunas => _vacunas;
+  List<ConsultaModel> get consultas => _consultas;
   bool get backendHealthy => _backendHealthy;
   String? get backendMessage => _backendMessage;
   int? get backendResponseTime => _backendResponseTime;
@@ -99,6 +102,7 @@ class SessionProvider extends ChangeNotifier {
       // Cargar datos frescos en background
       _loadCarnetData();
       _loadCitasData();
+      _loadConsultasData();
       _loadVacunasData();
       loadPromociones(notifyWhenDone: false);
       
@@ -175,6 +179,7 @@ class SessionProvider extends ChangeNotifier {
         // Cargar todos los datos SIN notificar en cada paso
         await _loadCarnetData();
         await _loadCitasData();
+        await _loadConsultasData();
         await _loadVacunasData();
         await loadPromociones(notifyWhenDone: false);
         
@@ -360,7 +365,49 @@ class SessionProvider extends ChangeNotifier {
     _setLoading(false);
   }
 
-  // �️ ELIMINAR CITAS PASADAS
+  // 📋 CARGAR CONSULTAS DE ATENCIÓN - BACKEND REAL SASU
+  Future<void> _loadConsultasData() async {
+    if (_token == null) return;
+
+    try {
+      print('🔍 Cargando consultas de atención desde SASU backend...');
+      final data = await ApiService.getConsultas(_token!);
+      
+      if (data.isNotEmpty) {
+        _consultas = data;
+        print('✅ CONSULTAS REALES CARGADAS: ${_consultas.length} consultas');
+        
+        // Debug: mostrar primera consulta
+        if (_consultas.isNotEmpty) {
+          print('📋 PRIMERA CONSULTA: ${_consultas.first.fecha} - ${_consultas.first.departamento}');
+        }
+      } else {
+        print('⚠️ NO HAY CONSULTAS DISPONIBLES EN EL BACKEND SASU');
+        _consultas = [];
+      }
+      
+      // NO llamar notifyListeners() aquí - se llamará al final del login
+    } catch (e) {
+      final errorStr = e.toString();
+      if (errorStr.contains('INVALID_TOKEN')) {
+        print('🚫 Token inválido detectado - cerrando sesión automáticamente');
+        await clearCache();
+        logout();
+      } else {
+        print('❌ ERROR CARGANDO CONSULTAS: $e');
+        _consultas = [];
+      }
+    }
+  }
+
+  // Método público para recargar consultas
+  Future<void> loadConsultas() async {
+    _setLoading(true);
+    await _loadConsultasData();
+    _setLoading(false);
+  }
+
+  // 🗑️ ELIMINAR CITAS PASADAS
   Future<Map<String, dynamic>> eliminarCitasPasadas() async {
     if (_token == null) {
       return {

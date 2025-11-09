@@ -18,46 +18,13 @@ class ConsultasScreen extends StatefulWidget {
 }
 
 class _ConsultasScreenState extends State<ConsultasScreen> {
-  List<ConsultaModel> _consultas = [];
-  bool _isLoading = true;
-  String? _errorMessage;
-
   @override
   void initState() {
     super.initState();
-    _cargarConsultas();
-  }
-
-  Future<void> _cargarConsultas() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
+    // Cargar consultas al inicializar
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<SessionProvider>().loadConsultas();
     });
-
-    try {
-      final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
-      final token = sessionProvider.token;
-
-      if (token == null) {
-        throw Exception('No hay sesión activa');
-      }
-
-      final consultas = await ApiService.getConsultas(token);
-      
-      if (mounted) {
-        setState(() {
-          _consultas = consultas;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Error al cargar consultas: ${e.toString()}';
-          _isLoading = false;
-        });
-      }
-    }
   }
 
   @override
@@ -68,43 +35,31 @@ class _ConsultasScreenState extends State<ConsultasScreen> {
         backgroundColor: UAGroColors.error,
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () async {
+              print('🔄 Refresh manual de consultas...');
+              await context.read<SessionProvider>().loadConsultas();
+            },
+            tooltip: 'Recargar consultas',
+          ),
+        ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _errorMessage != null
-              ? _buildErrorView()
-              : _consultas.isEmpty
-                  ? _buildEmptyView()
-                  : _buildConsultasList(),
-    );
-  }
+      body: Consumer<SessionProvider>(
+        builder: (context, session, child) {
+          if (session.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-  Widget _buildErrorView() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
-            const SizedBox(height: 16),
-            Text(
-              _errorMessage ?? 'Error desconocido',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _cargarConsultas,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Reintentar'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: UAGroColors.error,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
-        ),
+          final consultas = session.consultas;
+
+          if (consultas.isEmpty) {
+            return _buildEmptyView();
+          }
+
+          return _buildConsultasList(consultas);
+        },
       ),
     );
   }
@@ -139,30 +94,20 @@ class _ConsultasScreenState extends State<ConsultasScreen> {
                 color: Colors.grey.shade500,
               ),
             ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: _cargarConsultas,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Actualizar'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: UAGroColors.error,
-                foregroundColor: Colors.white,
-              ),
-            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildConsultasList() {
+  Widget _buildConsultasList(List<ConsultaModel> consultas) {
     return RefreshIndicator(
-      onRefresh: _cargarConsultas,
+      onRefresh: () => context.read<SessionProvider>().loadConsultas(),
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: _consultas.length,
+        itemCount: consultas.length,
         itemBuilder: (context, index) {
-          final consulta = _consultas[index];
+          final consulta = consultas[index];
           return _buildConsultaCard(consulta);
         },
       ),
