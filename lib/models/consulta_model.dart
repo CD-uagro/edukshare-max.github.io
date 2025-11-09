@@ -45,7 +45,9 @@ class ConsultaModel {
     
     if (dateValue is String) {
       try {
-        return DateTime.parse(dateValue);
+        // Parsear la fecha UTC y convertir a hora local del dispositivo
+        final utcDate = DateTime.parse(dateValue);
+        return utcDate.toLocal();
       } catch (e) {
         return DateTime.now();
       }
