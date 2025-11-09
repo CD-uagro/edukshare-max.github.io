@@ -43424,7 +43424,7 @@ $1(a){return a.a===this.a},
 $S:101}
 A.pa.prototype={
 ah(){var s=t.N
-return new A.Ec(A.aR(s),A.x(s,t.GU),A.ae(["fecha","19 de Octubre","titulo","D\xeda Mundial de Lucha contra el C\xe1ncer de Mama","descripcion","D\xeda dedicado a la concientizaci\xf3n sobre la importancia de la detecci\xf3n temprana del c\xe1ncer de mama.","color",B.Gr,"icono","\u2665","activa",!0],s,t.z))}}
+return new A.Ec(A.aR(s),A.x(s,t.GU),A.ae(["fecha","19 de Octubre","titulo","D\xeda Mundial de Lucha contra el C\xe1ncer de Mama","descripcion","D\xeda dedicado a la concientizaci\xf3n sobre la importancia de la detecci\xf3n temprana del c\xe1ncer de mama.","color",B.Gr,"icono","\u2665","activa",!1],s,t.z))}}
 A.Ec.prototype={
 az(){this.aN()
 $.ac.k4$.push(new A.anv(this))},

@@ -45,7 +45,7 @@ class _CarnetScreenState extends State<CarnetScreen> {
     'descripcion': 'Día dedicado a la concientización sobre la importancia de la detección temprana del cáncer de mama.',
     'color': const Color(0xFFE91E63),
     'icono': '♥',
-    'activa': true,
+    'activa': false, // ← DESACTIVADA - Ya terminó octubre
   };
 
   @override
