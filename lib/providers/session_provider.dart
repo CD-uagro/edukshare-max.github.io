@@ -367,19 +367,27 @@ class SessionProvider extends ChangeNotifier {
 
   // 📋 CARGAR CONSULTAS DE ATENCIÓN - BACKEND REAL SASU
   Future<void> _loadConsultasData() async {
-    if (_token == null) return;
+    if (_token == null) {
+      print('⚠️ No hay token para cargar consultas');
+      return;
+    }
 
     try {
       print('🔍 Cargando consultas de atención desde SASU backend...');
+      print('🔑 Token disponible: ${_token!.substring(0, 20)}...');
+      
       final data = await ApiService.getConsultas(_token!);
+      
+      print('📊 Respuesta recibida: ${data.length} consultas');
       
       if (data.isNotEmpty) {
         _consultas = data;
         print('✅ CONSULTAS REALES CARGADAS: ${_consultas.length} consultas');
         
-        // Debug: mostrar primera consulta
-        if (_consultas.isNotEmpty) {
-          print('📋 PRIMERA CONSULTA: ${_consultas.first.fecha} - ${_consultas.first.departamento}');
+        // Debug: mostrar todas las consultas
+        for (var i = 0; i < _consultas.length; i++) {
+          final c = _consultas[i];
+          print('📋 Consulta $i: ${c.fecha} - ${c.departamento} - ${c.medico}');
         }
       } else {
         print('⚠️ NO HAY CONSULTAS DISPONIBLES EN EL BACKEND SASU');
@@ -395,6 +403,7 @@ class SessionProvider extends ChangeNotifier {
         logout();
       } else {
         print('❌ ERROR CARGANDO CONSULTAS: $e');
+        print('❌ STACK TRACE: ${StackTrace.current}');
         _consultas = [];
       }
     }
