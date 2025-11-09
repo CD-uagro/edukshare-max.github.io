@@ -64,7 +64,7 @@ class _ConsultasScreenState extends State<ConsultasScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mis Consultas Médicas'),
+        title: const Text('Mis Consultas de Atención'),
         backgroundColor: UAGroColors.error,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -123,7 +123,7 @@ class _ConsultasScreenState extends State<ConsultasScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'No hay consultas médicas',
+              'No hay consultas de atención',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,

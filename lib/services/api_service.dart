@@ -566,17 +566,17 @@ class ApiService {
       return [];
     }
   }
-  // 📋 OBTENER CONSULTAS MÉDICAS DEL ESTUDIANTE - CON REINTENTOS
+  // 📋 OBTENER CONSULTAS DE ATENCIÓN DEL ESTUDIANTE - CON REINTENTOS
   static Future<List<ConsultaModel>> getConsultas(String token) async {
     final result = await _retryWithBackoff<List<ConsultaModel>>(
       () => _performGetConsultas(token),
       maxAttempts: maxRetries,
-      operationName: 'obtener consultas médicas',
+      operationName: 'obtener consultas de atención',
     );
     return result ?? [];
   }
 
-  // 📋 IMPLEMENTACIÓN DE OBTENCIÓN DE CONSULTAS MÉDICAS
+  // 📋 IMPLEMENTACIÓN DE OBTENCIÓN DE CONSULTAS DE ATENCIÓN
   static Future<List<ConsultaModel>> _performGetConsultas(String token) async {
     try {
       final url = Uri.parse('$baseUrl/me/consultas');
@@ -593,7 +593,7 @@ class ApiService {
       ).timeout(
         normalTimeout,
         onTimeout: () {
-          throw Exception('TIMEOUT: Timeout obteniendo consultas médicas');
+          throw Exception('TIMEOUT: Timeout obteniendo consultas de atención');
         },
       );
       
@@ -616,7 +616,7 @@ class ApiService {
         print('🚫 Token inválido detectado - limpiando sesión');
         throw Exception('INVALID_TOKEN: Token inválido o expirado');
       } else if (response.statusCode == 404) {
-        print('📭 No hay consultas médicas registradas');
+        print('📭 No hay consultas de atención registradas');
         return [];
       } else {
         print('❌ ERROR HTTP: ${response.statusCode}');

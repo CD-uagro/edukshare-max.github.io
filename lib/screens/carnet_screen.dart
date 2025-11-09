@@ -137,7 +137,7 @@ class _CarnetScreenState extends State<CarnetScreen> {
                 ),
               );
             },
-            tooltip: 'Mis Consultas',
+            tooltip: 'Mis Consultas de Atención',
           ),
           IconButton(
             icon: const Icon(Icons.medical_services_outlined),
@@ -3875,7 +3875,7 @@ class _CarnetScreenState extends State<CarnetScreen> {
             },
           ),
 
-          // 📋 CONSULTAS MÉDICAS
+          // 📋 CONSULTAS DE ATENCIÓN
           ListTile(
             leading: Container(
               padding: const EdgeInsets.all(6),
@@ -3885,8 +3885,8 @@ class _CarnetScreenState extends State<CarnetScreen> {
               ),
               child: Icon(Icons.assignment, color: Colors.blue.shade600, size: 20),
             ),
-            title: const Text('Mis Consultas'),
-            subtitle: const Text('Historial de atención médica'),
+            title: const Text('Mis Consultas de Atención'),
+            subtitle: const Text('Historial de atención en servicios'),
             onTap: () {
               Navigator.pop(context);
               Navigator.push(
