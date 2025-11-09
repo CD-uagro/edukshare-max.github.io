@@ -28,6 +28,9 @@ class SessionProvider extends ChangeNotifier {
   bool _backendHealthy = true;
   String? _backendMessage;
   int? _backendResponseTime;
+  
+  // Diseño del carnet seleccionado
+  String _carnetDesign = 'wallet'; // 'wallet' o 'modern'
 
   // Getters
   bool get isAuthenticated => _isLoggedIn;
@@ -43,11 +46,13 @@ class SessionProvider extends ChangeNotifier {
   bool get backendHealthy => _backendHealthy;
   String? get backendMessage => _backendMessage;
   int? get backendResponseTime => _backendResponseTime;
+  String get carnetDesign => _carnetDesign;
 
   // 🔧 KEYS PARA SHARED PREFERENCES
   static const String _keyToken = 'auth_token';
   static const String _keyCarnet = 'cached_carnet';
   static const String _keyLoginTime = 'login_timestamp';
+  static const String _keyCarnetDesign = 'carnet_design';
 
   // Setters internos
   void _setLoading(bool loading) {
@@ -75,6 +80,9 @@ class SessionProvider extends ChangeNotifier {
       final cachedToken = prefs.getString(_keyToken);
       final cachedCarnetJson = prefs.getString(_keyCarnet);
       final loginTimestamp = prefs.getInt(_keyLoginTime);
+      
+      // Restaurar preferencia de diseño
+      _carnetDesign = prefs.getString(_keyCarnetDesign) ?? 'wallet';
       
       if (cachedToken == null || cachedCarnetJson == null || loginTimestamp == null) {
         print('📭 No hay sesión guardada');
@@ -708,6 +716,27 @@ class SessionProvider extends ChangeNotifier {
     } catch (e) {
       print('❌ Error marcando promoción vista: $e');
     }
+  }
+
+  // 🎨 CAMBIAR DISEÑO DEL CARNET
+  Future<void> cambiarDiseno(String nuevoDiseno) async {
+    if (nuevoDiseno != 'wallet' && nuevoDiseno != 'modern') {
+      print('⚠️ Diseño no válido: $nuevoDiseno');
+      return;
+    }
+    
+    _carnetDesign = nuevoDiseno;
+    
+    // Guardar preferencia
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keyCarnetDesign, nuevoDiseno);
+      print('🎨 Diseño cambiado a: $nuevoDiseno');
+    } catch (e) {
+      print('❌ Error guardando preferencia de diseño: $e');
+    }
+    
+    notifyListeners();
   }
 
   // Logout

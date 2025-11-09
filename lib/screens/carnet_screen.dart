@@ -150,13 +150,39 @@ class _CarnetScreenState extends State<CarnetScreen> {
             },
             tooltip: 'Mis Citas',
           ),
-          IconButton(
-            icon: const Icon(Icons.logout_outlined),
-            onPressed: () {
-              context.read<SessionProvider>().logout();
-              Navigator.of(context).pushReplacementNamed('/login');
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            tooltip: 'Más opciones',
+            onSelected: (value) {
+              if (value == 'cambiar_diseno') {
+                _mostrarSelectorDiseno(context);
+              } else if (value == 'logout') {
+                context.read<SessionProvider>().logout();
+                Navigator.of(context).pushReplacementNamed('/login');
+              }
             },
-            tooltip: 'Cerrar Sesión',
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'cambiar_diseno',
+                child: Row(
+                  children: [
+                    Icon(Icons.palette_outlined, size: 20),
+                    SizedBox(width: 12),
+                    Text('Cambiar diseño'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout_outlined, size: 20),
+                    SizedBox(width: 12),
+                    Text('Cerrar Sesión'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -4530,6 +4556,136 @@ class _CarnetScreenState extends State<CarnetScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // 🎨 MOSTRAR SELECTOR DE DISEÑO
+  void _mostrarSelectorDiseno(BuildContext context) {
+    final session = context.read<SessionProvider>();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.palette_outlined, color: Color(0xFF8B1538)),
+            SizedBox(width: 12),
+            Text('Elegir diseño del carnet'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Selecciona tu diseño favorito del carnet digital:',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 20),
+            
+            // Opción: Diseño Wallet
+            _buildDisenoOption(
+              context: context,
+              titulo: 'Wallet Clásico',
+              descripcion: 'Diseño tipo billetera con promociones',
+              icono: Icons.account_balance_wallet_outlined,
+              valor: 'wallet',
+              seleccionado: session.carnetDesign == 'wallet',
+              onTap: () async {
+                await session.cambiarDiseno('wallet');
+                Navigator.pop(context);
+              },
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Opción: Diseño Moderno
+            _buildDisenoOption(
+              context: context,
+              titulo: 'Moderno Gradient',
+              descripcion: 'Diseño con gradientes y tarjeta central',
+              icono: Icons.credit_card_outlined,
+              valor: 'modern',
+              seleccionado: session.carnetDesign == 'modern',
+              onTap: () async {
+                await session.cambiarDiseno('modern');
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget helper para opciones de diseño
+  Widget _buildDisenoOption({
+    required BuildContext context,
+    required String titulo,
+    required String descripcion,
+    required IconData icono,
+    required String valor,
+    required bool seleccionado,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: seleccionado ? const Color(0xFF8B1538) : Colors.grey.shade300,
+            width: seleccionado ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          color: seleccionado ? const Color(0xFF8B1538).withOpacity(0.05) : Colors.transparent,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icono,
+              color: seleccionado ? const Color(0xFF8B1538) : Colors.grey.shade600,
+              size: 32,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    titulo,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: seleccionado ? const Color(0xFF8B1538) : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    descripcion,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (seleccionado)
+              const Icon(
+                Icons.check_circle,
+                color: Color(0xFF8B1538),
+                size: 24,
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -6,8 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:carnet_digital_uagro/providers/session_provider.dart';
 import 'package:carnet_digital_uagro/screens/login_screen.dart';
 import 'package:carnet_digital_uagro/screens/register_screen.dart';
-import 'package:carnet_digital_uagro/screens/carnet_screen.dart';
-import 'package:carnet_digital_uagro/screens/carnet_screen_new.dart';
+import 'package:carnet_digital_uagro/screens/carnet_selector_screen.dart';
 import 'package:carnet_digital_uagro/screens/vacunas_screen.dart';
 import 'package:carnet_digital_uagro/theme/uagro_theme.dart';
 
@@ -29,8 +28,7 @@ class CarnetDigitalApp extends StatelessWidget {
         routes: {
           '/login': (context) => const LoginScreen(),
           '/register': (context) => const RegisterScreen(),
-          '/carnet': (context) => const CarnetScreen(),
-          '/carnet-new': (context) => const CarnetScreenNew(),
+          '/carnet': (context) => const CarnetSelectorScreen(),
           '/vacunas': (context) => const VacunasScreen(),
         },
         debugShowCheckedModeBanner: false,

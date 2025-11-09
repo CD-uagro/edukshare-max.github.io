@@ -176,6 +176,16 @@ class _CarnetScreenNewState extends State<CarnetScreenNew> with TickerProviderSt
               ),
             ),
           ),
+          // Botón de menú (esquina superior derecha)
+          Positioned(
+            top: 15,
+            right: 15,
+            child: IconButton(
+              icon: const Icon(Icons.more_vert, color: Colors.white),
+              onPressed: () => _mostrarMenuOpciones(context),
+              tooltip: 'Más opciones',
+            ),
+          ),
           // Contenido del header
           Padding(
             padding: const EdgeInsets.all(25),
@@ -878,6 +888,213 @@ class _CarnetScreenNewState extends State<CarnetScreenNew> with TickerProviderSt
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // 📋 MOSTRAR MENÚ DE OPCIONES
+  void _mostrarMenuOpciones(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(25),
+            topRight: Radius.circular(25),
+          ),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Indicador visual
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            
+            ListTile(
+              leading: const Icon(Icons.palette_outlined, color: Color(0xFF8B1538)),
+              title: const Text('Cambiar diseño'),
+              onTap: () {
+                Navigator.pop(context);
+                _mostrarSelectorDiseno(context);
+              },
+            ),
+            
+            ListTile(
+              leading: const Icon(Icons.assignment_outlined, color: Color(0xFF8B1538)),
+              title: const Text('Mis Consultas de Atención'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const CitasScreen()),
+                );
+              },
+            ),
+            
+            ListTile(
+              leading: const Icon(Icons.medical_services_outlined, color: Color(0xFF8B1538)),
+              title: const Text('Mis Citas'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const CitasScreen()),
+                );
+              },
+            ),
+            
+            const Divider(height: 1),
+            
+            ListTile(
+              leading: const Icon(Icons.logout_outlined, color: Colors.red),
+              title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red)),
+              onTap: () {
+                context.read<SessionProvider>().logout();
+                Navigator.of(context).pushReplacementNamed('/login');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 🎨 MOSTRAR SELECTOR DE DISEÑO
+  void _mostrarSelectorDiseno(BuildContext context) {
+    final session = context.read<SessionProvider>();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.palette_outlined, color: Color(0xFF8B1538)),
+            SizedBox(width: 12),
+            Text('Elegir diseño del carnet'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Selecciona tu diseño favorito del carnet digital:',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 20),
+            
+            // Opción: Diseño Wallet
+            _buildDisenoOption(
+              context: context,
+              titulo: 'Wallet Clásico',
+              descripcion: 'Diseño tipo billetera con promociones',
+              icono: Icons.account_balance_wallet_outlined,
+              valor: 'wallet',
+              seleccionado: session.carnetDesign == 'wallet',
+              onTap: () async {
+                await session.cambiarDiseno('wallet');
+                Navigator.pop(context);
+              },
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Opción: Diseño Moderno
+            _buildDisenoOption(
+              context: context,
+              titulo: 'Moderno Gradient',
+              descripcion: 'Diseño con gradientes y tarjeta central',
+              icono: Icons.credit_card_outlined,
+              valor: 'modern',
+              seleccionado: session.carnetDesign == 'modern',
+              onTap: () async {
+                await session.cambiarDiseno('modern');
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget helper para opciones de diseño
+  Widget _buildDisenoOption({
+    required BuildContext context,
+    required String titulo,
+    required String descripcion,
+    required IconData icono,
+    required String valor,
+    required bool seleccionado,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: seleccionado ? const Color(0xFF8B1538) : Colors.grey.shade300,
+            width: seleccionado ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          color: seleccionado ? const Color(0xFF8B1538).withOpacity(0.05) : Colors.transparent,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icono,
+              color: seleccionado ? const Color(0xFF8B1538) : Colors.grey.shade600,
+              size: 32,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    titulo,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: seleccionado ? const Color(0xFF8B1538) : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    descripcion,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (seleccionado)
+              const Icon(
+                Icons.check_circle,
+                color: Color(0xFF8B1538),
+                size: 24,
+              ),
+          ],
         ),
       ),
     );
