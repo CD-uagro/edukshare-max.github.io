@@ -43,22 +43,68 @@ class AlebrijeProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Intentar cargar desde localStorage primero
       final prefs = await SharedPreferences.getInstance();
-      final alebrijeJson = prefs.getString('alebrije_data');
       
-      if (alebrijeJson != null) {
-        // SIEMPRE usar el alebrije guardado si existe
-        _alebrije = AlebrijeModel.fromJson(jsonDecode(alebrijeJson));
-        print('✅ Alebrije existente cargado desde localStorage: ${_alebrije!.nombre} (${_alebrije!.dna.especieBase})');
+      // ⚠️ ESTRATEGIA DE SINCRONIZACIÓN FORZADA:
+      // Azure Cosmos DB es la ÚNICA fuente de verdad
+      // localStorage es solo caché temporal y se borra si difiere
+      
+      final token = prefs.getString('auth_token');
+      if (token == null) {
+        print('❌ No hay token de autenticación - requiere login');
+        _error = 'Sesión expirada. Por favor inicia sesión nuevamente.';
+        _isLoading = false;
+        notifyListeners();
+        return;
+      }
+      
+      AlebrijeModel? alebrijeBackend;
+      try {
+        alebrijeBackend = await _cargarDesdeBackend(token);
+      } catch (e) {
+        print('❌ Error al cargar desde Cosmos DB: $e');
+        _error = 'No se pudo conectar con el servidor. Verifica tu conexión.';
+        _isLoading = false;
+        notifyListeners();
+        return;
+      }
+      
+      if (alebrijeBackend != null) {
+        // ✅ COSMOS DB TIENE DATOS - ESTA ES LA VERDAD ABSOLUTA
+        print('✅ Alebrije recuperado desde Cosmos DB (Azure)');
+        print('   - Nombre: ${alebrijeBackend.nombre}');
+        print('   - Nivel: ${alebrijeBackend.nivelEvolucion}');
+        print('   - DNA: ${alebrijeBackend.dna.especieBase}');
         
-        // Cargar cápsulas guardadas
+        // Verificar si localStorage tiene datos diferentes
+        final alebrijeJson = prefs.getString('alebrije_data');
+        if (alebrijeJson != null) {
+          try {
+            final alebrijeLocal = AlebrijeModel.fromJson(jsonDecode(alebrijeJson));
+            if (alebrijeLocal.nombre != alebrijeBackend.nombre ||
+                alebrijeLocal.dna.especieBase != alebrijeBackend.dna.especieBase) {
+              print('🔄 CONFLICTO DETECTADO: localStorage difiere de Azure');
+              print('   - Local: ${alebrijeLocal.nombre} (${alebrijeLocal.dna.especieBase})');
+              print('   - Azure: ${alebrijeBackend.nombre} (${alebrijeBackend.dna.especieBase})');
+              print('   - BORRANDO caché local obsoleto');
+              await prefs.remove('alebrije_data');
+            }
+          } catch (e) {
+            print('⚠️ localStorage corrupto, borrando: $e');
+            await prefs.remove('alebrije_data');
+          }
+        }
+        
+        _alebrije = alebrijeBackend;
+        
+        // Actualizar localStorage como caché (solo después de confirmar es correcto)
+        await prefs.setString('alebrije_data', jsonEncode(_alebrije!.toJson()));
+        
+        // Cargar cápsulas
         final capsulasJson = prefs.getString('alebrije_capsulas');
         if (capsulasJson != null) {
           final List<dynamic> capsulasList = jsonDecode(capsulasJson);
           _capsulas = capsulasList.map((json) => CapsulaPoder.fromJson(json)).toList();
-          
-          // Limpiar cápsulas expiradas
           _capsulas.removeWhere((c) => !c.estaActiva && c.duracion != null);
           print('💊 ${capsulasActivas.length} cápsulas activas cargadas');
         }
@@ -72,43 +118,25 @@ class AlebrijeProvider extends ChangeNotifier {
         _ultimaActualizacion = DateTime.now();
         _isLoading = false;
         notifyListeners();
+        await _verificarBonusDiario();
         _verificarNecesidadesYNotificar();
-        return; // IMPORTANTE: Salir aquí, no regenerar
+        return;
       }
       
-      // Solo si NO existe alebrije guardado, intentar backend
-      try {
-        final token = prefs.getString('auth_token');
-        if (token != null) {
-          final alebrijeBackend = await _cargarDesdeBackend(token);
-          if (alebrijeBackend != null) {
-            _alebrije = alebrijeBackend;
-            print('✅ Alebrije recuperado desde backend');
-            
-            // Aplicar decaimiento y terminar
-            _alebrije = _alebrije!.copyWith(
-              estado: _alebrije!.estado.aplicarDecaimiento(),
-              updatedAt: DateTime.now(),
-            );
-            
-            _ultimaActualizacion = DateTime.now();
-            _isLoading = false;
-            notifyListeners();
-            _verificarNecesidadesYNotificar();
-            return;
-          }
-        }
-      } catch (e) {
-        print('⚠️ No se pudo cargar desde backend (normal si es primera vez): $e');
+      // PRIORIDAD 2: No existe en Cosmos DB - usuario nuevo debe elegir especie
+      // Si especieBase es null, el usuario debe elegir primero
+      if (especieBase == null) {
+        print('🎨 Usuario nuevo: debe elegir especie de alebrije');
+        _alebrije = null; // Mantener null para mostrar diálogo de selección
+        _isLoading = false;
+        notifyListeners();
+        return;
       }
       
-      // Solo generar nuevo alebrije si NO existe ninguno guardado
-      final especies = ['jaguar', 'aguila', 'serpiente', 'venado', 'colibri'];
-      final especieSeleccionada = especieBase ?? especies[Random().nextInt(especies.length)];
-      
+      // Si se proporcionó especieBase, generar alebrije
       _alebrije = AlebrijeModel.generar(
         matricula: matricula,
-        especieBase: especieSeleccionada,
+        especieBase: especieBase,
       );
       
       print('🎨 Nuevo alebrije generado: ${_alebrije!.nombre} (${_alebrije!.dna.especieBase})');
@@ -126,6 +154,9 @@ class AlebrijeProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
 
+      // Verificar bonus diario por buen cuidado
+      await _verificarBonusDiario();
+      
       // Verificar si necesita atención
       _verificarNecesidadesYNotificar();
     } catch (e) {
@@ -135,7 +166,7 @@ class AlebrijeProvider extends ChangeNotifier {
     }
   }
 
-  /// Alimenta al alebrije (se activa con consultas médicas)
+  /// Alimentar al alebrije
   Future<void> alimentar(int cantidad) async {
     if (_alebrije == null) return;
 
@@ -144,6 +175,9 @@ class AlebrijeProvider extends ChangeNotifier {
       updatedAt: DateTime.now(),
     );
 
+    // Ganar experiencia por interacción (aumentado para progresión más rápida)
+    await agregarExperiencia(15, 'Alimentar');
+    
     await _guardarEstado();
     notifyListeners();
   }
@@ -157,6 +191,9 @@ class AlebrijeProvider extends ChangeNotifier {
       updatedAt: DateTime.now(),
     );
 
+    // Ganar experiencia por interacción (aumentado para progresión más rápida)
+    await agregarExperiencia(25, 'Jugar');
+    
     await _guardarEstado();
     notifyListeners();
   }
@@ -184,6 +221,9 @@ class AlebrijeProvider extends ChangeNotifier {
       updatedAt: DateTime.now(),
     );
 
+    // Ganar experiencia por interacción (aumentado para progresión más rápida)
+    await agregarExperiencia(30, 'Curar');
+    
     await _guardarEstado();
     notifyListeners();
   }
@@ -197,6 +237,9 @@ class AlebrijeProvider extends ChangeNotifier {
       updatedAt: DateTime.now(),
     );
 
+    // Ganar experiencia por interacción (aumentado para progresión más rápida)
+    await agregarExperiencia(20, 'Descansar');
+    
     await _guardarEstado();
     notifyListeners();
   }
@@ -230,8 +273,9 @@ class AlebrijeProvider extends ChangeNotifier {
   }
 
   int _calcularPuntosNecesarios(int nivel) {
-    // Fórmula exponencial: 100 * (nivel ^ 1.5)
-    return (100 * pow(nivel, 1.5)).round();
+    // Fórmula ultra-rápida para progresión visible inmediata
+    // Nivel 2: 30 XP (~2 acciones), Nivel 3: 52 XP, Nivel 4: 75 XP
+    return (30 * pow(nivel, 1.25)).round();
   }
 
   /// Evoluciona el alebrije con mutaciones genéticas
@@ -274,29 +318,76 @@ class AlebrijeProvider extends ChangeNotifier {
     print('✨ Animación de evolución - Nivel $nivel');
   }
 
-  /// Guarda el estado del alebrije en localStorage y backend
+  /// 🔄 Forzar sincronización desde Azure (para resolver conflictos entre dispositivos)
+  Future<void> forzarSincronizacionDesdeAzure() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+      
+      if (token == null) {
+        print('❌ No hay token para sincronizar');
+        return;
+      }
+      
+      print('🔄 Forzando sincronización desde Azure Cosmos DB...');
+      final alebrijeBackend = await _cargarDesdeBackend(token);
+      
+      if (alebrijeBackend != null) {
+        // Comparar con versión local
+        if (_alebrije != null) {
+          if (_alebrije!.nombre != alebrijeBackend.nombre ||
+              _alebrije!.dna.especieBase != alebrijeBackend.dna.especieBase ||
+              _alebrije!.nivelEvolucion != alebrijeBackend.nivelEvolucion) {
+            print('⚠️ CONFLICTO: Versión local difiere de Azure');
+            print('   Local: ${_alebrije!.nombre} Lv.${_alebrije!.nivelEvolucion}');
+            print('   Azure: ${alebrijeBackend.nombre} Lv.${alebrijeBackend.nivelEvolucion}');
+          }
+        }
+        
+        // Azure SIEMPRE gana
+        _alebrije = alebrijeBackend;
+        await prefs.setString('alebrije_data', jsonEncode(_alebrije!.toJson()));
+        await prefs.remove('alebrije_capsulas'); // Limpiar cápsulas locales
+        print('✅ Sincronizado desde Azure: ${_alebrije!.nombre} Lv.${_alebrije!.nivelEvolucion}');
+        notifyListeners();
+      }
+    } catch (e) {
+      print('❌ Error en sincronización forzada: $e');
+    }
+  }
+
+  /// Guarda el estado del alebrije - AZURE PRIMERO, localStorage como caché
   Future<void> _guardarEstado() async {
     if (_alebrije == null) return;
     
     try {
-      // Guardar en localStorage primero (respaldo principal)
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('alebrije_data', jsonEncode(_alebrije!.toJson()));
-      
-      // Guardar cápsulas
-      await prefs.setString('alebrije_capsulas', jsonEncode(_capsulas.map((c) => c.toJson()).toList()));
-      
-      print('💾 Alebrije y ${_capsulas.length} cápsulas guardados en localStorage');
-      
-      // Sincronizar con backend (respaldo secundario)
       final token = prefs.getString('auth_token');
+      
+      // ⚠️ PRIORIDAD 1: SINCRONIZAR CON AZURE COSMOS DB PRIMERO
       if (token != null) {
-        await _sincronizarConBackend(token);
+        try {
+          await _sincronizarConBackend(token);
+          print('✅ Estado guardado en Azure Cosmos DB (fuente principal)');
+        } catch (e) {
+          print('❌ Error al sincronizar con Azure: $e');
+          // Si falla Azure, no guardar en localStorage para evitar desincronización
+          throw Exception('No se pudo sincronizar con servidor: $e');
+        }
+      } else {
+        print('⚠️ No hay token - no se puede guardar en Azure');
+        throw Exception('Sesión expirada');
       }
+      
+      // PRIORIDAD 2: Guardar en localStorage como caché (solo si Azure tuvo éxito)
+      await prefs.setString('alebrije_data', jsonEncode(_alebrije!.toJson()));
+      await prefs.setString('alebrije_capsulas', jsonEncode(_capsulas.map((c) => c.toJson()).toList()));
+      print('💾 Caché local actualizado (${_capsulas.length} cápsulas)');
       
       _ultimaActualizacion = DateTime.now();
     } catch (e) {
       print('❌ Error al guardar estado: $e');
+      rethrow; // Propagar error para que UI sepa que falló
     }
   }
 
@@ -322,6 +413,45 @@ class AlebrijeProvider extends ChangeNotifier {
     if (necesidades.isNotEmpty) {
       print('⚠️ Necesidades del alebrije: ${necesidades.join(', ')}');
       // TODO: Implementar notificaciones push
+    }
+  }
+
+  /// Verifica y otorga bonus cada 4 horas por mantener todas las barras >50%
+  Future<void> _verificarBonusDiario() async {
+    if (_alebrije == null) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final ultimoBonusStr = prefs.getString('alebrije_ultimo_bonus_${_alebrije!.matricula}');
+    final ahora = DateTime.now();
+    
+    // Verificar si ya se otorgó bonus en la última hora (progresión rápida)
+    if (ultimoBonusStr != null) {
+      final ultimoBonus = DateTime.parse(ultimoBonusStr);
+      final diferenciaMinutos = ahora.difference(ultimoBonus).inMinutes;
+      
+      if (diferenciaMinutos < 60) {
+        // Ya se otorgó bonus recientemente
+        final minutosRestantes = 60 - diferenciaMinutos;
+        print('⏰ Próximo bonus en $minutosRestantes minuto(s)');
+        return;
+      }
+    }
+
+    // Verificar si todas las barras están >50%
+    final estado = _alebrije!.estado;
+    final todasBarrasAltas = estado.hambre > 50 &&
+                               estado.felicidad > 50 &&
+                               estado.salud > 50 &&
+                               estado.energia > 50;
+
+    if (todasBarrasAltas) {
+      print('🌟 ¡BONUS DE CUIDADO! Todas las barras >50%');
+      await agregarExperiencia(50, 'Bonus por buen cuidado');
+      
+      // Guardar el timestamp del último bonus
+      await prefs.setString('alebrije_ultimo_bonus_${_alebrije!.matricula}', ahora.toIso8601String());
+    } else {
+      print('💡 Mantén todas las barras >50% para recibir +50 XP cada hora');
     }
   }
 

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:convert';
+import 'dart:html' as html;
+import 'dart:ui' as ui;
 import '../providers/alebrije_provider.dart';
 import '../providers/session_provider.dart';
 import '../services/alebrije_generator.dart';
@@ -29,6 +31,7 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
   
   final List<Offset> _particulas = [];
   final List<String> _mensajesAlebrije = [];
+  final List<Map<String, dynamic>> _xpFlotantes = []; // Lista de XP ganados flotando
 
   @override
   void initState() {
@@ -68,11 +71,14 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
       if (alebrijeProvider.alebrije == null) {
         await alebrijeProvider.inicializarAlebrije(matricula);
       } else {
+        // 🔄 FORZAR sincronización desde Azure al abrir la pantalla
+        await alebrijeProvider.forzarSincronizacionDesdeAzure();
         await alebrijeProvider.actualizarEstado();
       }
       
       _evaluarEstadoEmocional();
       _iniciarAnimacionesAutomaticas();
+      _iniciarSincronizacionPeriodica(); // Sincronizar cada 2 minutos
     });
   }
   
@@ -82,6 +88,18 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
       if (mounted) {
         _animacionAleatoria();
         _iniciarAnimacionesAutomaticas();
+      }
+    });
+  }
+
+  void _iniciarSincronizacionPeriodica() {
+    // 🔄 Sincronizar desde Azure cada 2 minutos para mantener consistencia entre dispositivos
+    Future.delayed(const Duration(minutes: 2), () async {
+      if (mounted) {
+        print('⏰ Sincronización automática desde Azure...');
+        final alebrijeProvider = context.read<AlebrijeProvider>();
+        await alebrijeProvider.forzarSincronizacionDesdeAzure();
+        _iniciarSincronizacionPeriodica();
       }
     });
   }
@@ -153,6 +171,27 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
       if (mounted) {
         setState(() {
           _mensajesAlebrije.remove(mensaje);
+        });
+      }
+    });
+  }
+
+  void _mostrarXPGanado(int xp, {String? bonus}) {
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    setState(() {
+      _xpFlotantes.add({
+        'id': id,
+        'xp': xp,
+        'bonus': bonus,
+        'time': DateTime.now(),
+      });
+    });
+    
+    // Remover después de 2 segundos
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _xpFlotantes.removeWhere((item) => item['id'] == id);
         });
       }
     });
@@ -281,6 +320,27 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.cloud_sync, color: Colors.white),
+            tooltip: 'Sincronizar desde Azure',
+            onPressed: () async {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('🔄 Sincronizando desde Azure...'), duration: Duration(seconds: 1)),
+              );
+              final alebrijeProvider = context.read<AlebrijeProvider>();
+              await alebrijeProvider.forzarSincronizacionDesdeAzure();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('✅ Sincronizado con Azure'), duration: Duration(seconds: 2)),
+                );
+              }
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.download, color: Colors.white),
+            tooltip: 'Descargar imagen',
+            onPressed: () => _descargarImagenAlebrije(context, alebrije),
+          ),
           IconButton(
             icon: const Icon(Icons.edit, color: Colors.white),
             tooltip: 'Renombrar',
@@ -780,6 +840,82 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
           );
         }).toList(),
         
+        // XP flotantes (números que suben y se desvanecen)
+        ..._xpFlotantes.asMap().entries.map((entry) {
+          final index = entry.key;
+          final data = entry.value;
+          final elapsed = DateTime.now().difference(data['time'] as DateTime).inMilliseconds;
+          final progress = (elapsed / 2000).clamp(0.0, 1.0);
+          
+          return Positioned(
+            top: 250 - (progress * 150) - (index * 30.0), // Sube hacia arriba
+            right: 50 + (index * 20.0), // Separa múltiples XP
+            child: TweenAnimationBuilder(
+              duration: const Duration(milliseconds: 2000),
+              tween: Tween<double>(begin: 0, end: 1),
+              builder: (context, double value, child) {
+                return Transform.scale(
+                  scale: 1.0 + (value * 0.5) - (value * value * 0.5), // Crece y luego decrece
+                  child: Opacity(
+                    opacity: (1.0 - value).clamp(0.0, 1.0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.amber.shade400,
+                            Colors.orange.shade600,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.amber.withOpacity(0.5),
+                            blurRadius: 15,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.stars, color: Colors.white, size: 16),
+                          const SizedBox(width: 4),
+                          Text(
+                            '+${data['xp']} XP',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black26,
+                                  offset: Offset(1, 1),
+                                  blurRadius: 2,
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (data['bonus'] != null) ...[
+                            const SizedBox(width: 4),
+                            Text(
+                              data['bonus'],
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.white70,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          );
+        }).toList(),
+        
         // Indicador de toque "Toca aquí"
         if (_toquesConsecutivos == 0 && _ultimoToque == null)
           Positioned(
@@ -959,7 +1095,10 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                   icon: Icons.restaurant,
                   label: 'Alimentar',
                   color: Colors.orange,
-                  onTap: () => provider.alimentar(20),
+                  onTap: () {
+                    provider.alimentar(20);
+                    _mostrarXPGanado(15);
+                  },
                 ),
               ),
               const SizedBox(width: 12),
@@ -968,7 +1107,10 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                   icon: Icons.sports_esports,
                   label: 'Jugar',
                   color: Colors.purple,
-                  onTap: () => provider.jugar(),
+                  onTap: () {
+                    provider.jugar();
+                    _mostrarXPGanado(25);
+                  },
                 ),
               ),
             ],
@@ -981,7 +1123,10 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                   icon: Icons.medical_services,
                   label: 'Curar',
                   color: Colors.red,
-                  onTap: () => provider.curar(30),
+                  onTap: () {
+                    provider.curar(30);
+                    _mostrarXPGanado(30);
+                  },
                 ),
               ),
               const SizedBox(width: 12),
@@ -990,7 +1135,10 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                   icon: Icons.bedtime,
                   label: 'Descansar',
                   color: Colors.blue,
-                  onTap: () => provider.descansar(),
+                  onTap: () {
+                    provider.descansar();
+                    _mostrarXPGanado(20);
+                  },
                 ),
               ),
             ],
@@ -1095,29 +1243,29 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
     switch (accion) {
       case 'Alimentar':
         final mensajes = [
-          '¡Mmm, delicioso! 😋',
-          '¡Qué rico! 🤤',
-          '¡Estaba hambriento! 🍽️',
-          '¡Gracias por la comida! 💕',
-          '¡Ahora tengo energía! ⚡',
+          '¡Mmm, delicioso! +5 XP 😋',
+          '¡Qué rico! +5 XP 🤤',
+          '¡Estaba hambriento! +5 XP 🍽️',
+          '¡Gracias por la comida! +5 XP 💕',
+          '¡Ahora tengo energía! +5 XP ⚡',
         ];
         return mensajes[random];
         
       case 'Jugar':
         final mensajes = [
-          '¡Esto es divertido! 🎉',
-          '¡Me encanta jugar! 🎮',
-          '¡Otra vez, otra vez! 🤗',
-          '¡Eres el mejor! ⭐',
-          '¡Jajaja! 😆',
+          '¡Esto es divertido! +10 XP 🎉',
+          '¡Me encanta jugar! +10 XP 🎮',
+          '¡Otra vez, otra vez! +10 XP 🤗',
+          '¡Eres el mejor! +10 XP ⭐',
+          '¡Jajaja! +10 XP 😆',
         ];
         return mensajes[random];
         
       case 'Curar':
         final mensajes = [
-          'Me siento mejor 💊',
-          '¡Gracias, doctor! 🏥',
-          'Ya no me duele 😌',
+          'Me siento mejor +15 XP 💊',
+          '¡Gracias, doctor! +15 XP 🏥',
+          'Ya no me duele +15 XP 😌',
           '¡Qué alivio! 💚',
           'Ahora estoy sano 🩺',
         ];
@@ -1125,11 +1273,11 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
         
       case 'Descansar':
         final mensajes = [
-          'Zzz... 😴',
-          '¡Qué sueño! 🛌',
-          'Necesitaba esto 💤',
-          '¡Dulces sueños! 🌙',
-          'Recargan do energías... ⚡',
+          'Zzz... +8 XP 😴',
+          '¡Qué sueño! +8 XP 🛌',
+          'Necesitaba esto +8 XP 💤',
+          '¡Dulces sueños! +8 XP 🌙',
+          'Recargando energías... +8 XP ⚡',
         ];
         return mensajes[random];
         
@@ -1799,5 +1947,181 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
         duration: const Duration(seconds: 2),
       ),
     );
+  }
+
+  /// Descargar imagen del alebrije con información del DNA único
+  void _descargarImagenAlebrije(BuildContext context, alebrije) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.download, color: Color(0xFF8B1538)),
+            SizedBox(width: 8),
+            Text('Descargar Alebrije'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '🎨 ${alebrije.nombre}',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Text('📊 Nivel: ${alebrije.nivelEvolucion}'),
+            Text('🧬 Especie: ${alebrije.dna.especieBase.toUpperCase()}'),
+            Text('⭐ Experiencia: ${alebrije.puntosExperiencia} XP'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.purple.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.purple.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.fingerprint, color: Colors.purple, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'DNA Virtual Único',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.purple,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Tu alebrije tiene un código genético único e irrepetible, como una huella digital. Cada gen determina colores, patrones y características que lo hacen especial.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Generación: ${alebrije.dna.generacion} | Mutaciones: ${alebrije.dna.mutaciones.length}',
+                    style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.auto_awesome, color: Colors.blue, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'Sistema de Transformación',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'A medida que ganas experiencia, tu alebrije evoluciona y muta, transformando su apariencia. Cada nivel desbloquea nuevos colores, patrones y características únicas.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              '📸 Se descargará una imagen PNG con tu alebrije en su estado evolutivo actual.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _ejecutarDescarga(alebrije);
+            },
+            icon: const Icon(Icons.download),
+            label: const Text('Descargar'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B1538),
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _ejecutarDescarga(alebrije) {
+    try {
+      // Generar SVG del alebrije usando la instancia del generador
+      final generator = AlebrijeGenerator(alebrije);
+      final svgString = generator.generarSVG(width: 800, height: 800);
+      
+      // Crear un blob con el SVG
+      final bytes = utf8.encode(svgString);
+      final blob = html.Blob([bytes], 'image/svg+xml');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      
+      // Crear elemento de descarga con nombre descriptivo
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final filename = '${alebrije.nombre.replaceAll(' ', '_')}_Nivel${alebrije.nivelEvolucion}_DNA${alebrije.dna.hashCode.abs()}_$timestamp.svg';
+      
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', filename)
+        ..click();
+      
+      // Limpiar URL
+      html.Url.revokeObjectUrl(url);
+      
+      // Mostrar mensaje de éxito
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('✨ ${alebrije.nombre} descargado exitosamente (DNA único: ${alebrije.dna.hashCode.abs()})'),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      
+      setState(() {
+        _mostrarMensajeAlebrije('¡Ahora tengo mi foto! 📸');
+      });
+      
+    } catch (e) {
+      print('❌ Error al descargar imagen: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('❌ Error al descargar la imagen'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

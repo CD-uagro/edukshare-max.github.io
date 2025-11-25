@@ -19,13 +19,14 @@ class ApiService {
   static const int maxRetries = 3;
   static const Duration shortTimeout = Duration(seconds: 8);  // Health check
   static const Duration normalTimeout = Duration(seconds: 20); // Operaciones normales
-  static const Duration longTimeout = Duration(seconds: 35);   // Login con cold start
+  static const Duration longTimeout = Duration(seconds: 60);   // Login con cold start (Render puede tardar 50-60s)
   
   // 🔄 MÉTODO AUXILIAR: REINTENTO CON BACKOFF EXPONENCIAL
   static Future<T?> _retryWithBackoff<T>(
     Future<T> Function() operation, {
     int maxAttempts = maxRetries,
     String operationName = 'operación',
+    bool isLogin = false, // Flag especial para login con cold start
   }) async {
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
@@ -35,15 +36,33 @@ class ApiService {
         return result;
       } catch (e) {
         final isLastAttempt = attempt == maxAttempts;
+        final errorMsg = e.toString();
+        
+        // No reintentar si son credenciales incorrectas
+        if (errorMsg.contains('CREDENTIALS_ERROR')) {
+          print('🚫 Credenciales incorrectas, no se reintentará');
+          rethrow;
+        }
+        
+        // Manejo especial del error 429 (rate limiting)
+        if (errorMsg.contains('429')) {
+          print('⏸️ Rate limit alcanzado (429) - Esperando 3 segundos antes de reintentar...');
+          await Future.delayed(const Duration(seconds: 3));
+          if (!isLastAttempt) continue;
+        }
         
         if (isLastAttempt) {
           print('❌ $operationName falló después de $maxAttempts intentos: $e');
           rethrow;
         }
         
-        // Backoff exponencial: 2s, 4s, 8s...
-        final waitTime = Duration(seconds: 2 * attempt);
-        print('⏳ Reintentando en ${waitTime.inSeconds}s... (Error: ${e.toString().substring(0, 50)})');
+        // Backoff más largo para login (cold start de Render puede tardar mucho)
+        final waitTime = isLogin 
+            ? Duration(seconds: 8 * attempt) // 8s, 16s, 24s para login (total: 60+8+16=84s máx)
+            : Duration(seconds: 2 * attempt); // 2s, 4s, 8s para operaciones normales
+        
+        final timeoutMsg = errorMsg.contains('TIMEOUT') ? '⏱️ Timeout - Render despertando' : '🔌 Error de conexión';
+        print('⏳ Reintentando en ${waitTime.inSeconds}s... ($timeoutMsg)');
         await Future.delayed(waitTime);
       }
     }
@@ -93,6 +112,7 @@ class ApiService {
     return await _retryWithBackoff<Map<String, dynamic>>(
       () => _performLogin(matricula, password),
       operationName: 'login',
+      isLogin: true, // Usar tiempos de espera más largos para cold start de Render
     );
   }
   
@@ -308,6 +328,12 @@ class ApiService {
       
       print('📊 CARNET RESPONSE: ${response.statusCode}');
       
+      // Manejo específico del error 429 (rate limiting)
+      if (response.statusCode == 429) {
+        print('⏸️ Error 429: Rate limit alcanzado - Demasiadas peticiones');
+        throw Exception('HTTP_ERROR_429: ${response.body}');
+      }
+      
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         print('📋 RESPONSE DATA: ${data}');
@@ -352,6 +378,11 @@ class ApiService {
       
       print('📊 CITAS RESPONSE: ${response.statusCode}');
       print('📋 RESPONSE BODY: ${response.body}');
+      
+      if (response.statusCode == 429) {
+        print('⏸️ Error 429: Rate limit alcanzado en citas');
+        throw Exception('HTTP_ERROR_429: ${response.body}');
+      }
       
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -441,6 +472,11 @@ class ApiService {
       
       print('📊 PROMOCIONES RESPONSE: ${response.statusCode}');
       print('📋 RESPONSE BODY: ${response.body}');
+      
+      if (response.statusCode == 429) {
+        print('⏸️ Error 429: Rate limit alcanzado en promociones');
+        throw Exception('HTTP_ERROR_429: ${response.body}');
+      }
       
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
@@ -585,6 +621,11 @@ class ApiService {
       print('📊 VACUNAS RESPONSE: ${response.statusCode}');
       print('📋 RESPONSE BODY: ${response.body}');
       
+      if (response.statusCode == 429) {
+        print('⏸️ Error 429: Rate limit alcanzado en vacunas');
+        throw Exception('HTTP_ERROR_429: ${response.body}');
+      }
+      
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         
@@ -653,6 +694,11 @@ class ApiService {
       
       print('📊 CONSULTAS RESPONSE: ${response.statusCode}');
       print('📋 RESPONSE BODY: ${response.body}');
+      
+      if (response.statusCode == 429) {
+        print('⏸️ Error 429: Rate limit alcanzado en consultas');
+        throw Exception('HTTP_ERROR_429: ${response.body}');
+      }
       
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -740,6 +786,10 @@ class ApiService {
   static Future<bool> createAlebrije(String token, Map<String, dynamic> alebrijeData) async {
     final result = await _retryWithBackoff(
       () async {
+        print('📤 ENVIANDO ALEBRIJE A BACKEND:');
+        print('   - Nombre: ${alebrijeData['nombre']}');
+        print('   - Especie: ${alebrijeData['dna']?['especieBase']}');
+        
         final response = await http
             .post(
               Uri.parse('$baseUrl/me/alebrije'),
@@ -765,6 +815,7 @@ class ApiService {
           throw Exception('INVALID_TOKEN: Token inválido');
         } else {
           print('⚠️ Error creando alebrije: ${response.statusCode}');
+          print('📋 RESPONSE BODY: ${response.body}');
           return false;
         }
       },
