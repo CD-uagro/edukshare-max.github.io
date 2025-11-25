@@ -107,13 +107,9 @@ class SessionProvider extends ChangeNotifier {
       print('✅ Sesión restaurada: ${_carnet?.nombreCompleto}');
       print('🕐 Login hace $daysSinceLogin día(s)');
       
-      // Cargar datos frescos en background
-      // Cargar datos con delays para evitar rate limiting
-      _loadCarnetData();
-      Future.delayed(const Duration(milliseconds: 500), () => _loadCitasData());
-      Future.delayed(const Duration(milliseconds: 1000), () => _loadConsultasData());
-      Future.delayed(const Duration(milliseconds: 1500), () => _loadVacunasData());
-      Future.delayed(const Duration(milliseconds: 2000), () => loadPromociones(notifyWhenDone: false));
+      // ⚠️ Cargar datos SECUENCIALMENTE para evitar 429
+      // NO cargar nada en background durante restauración de sesión
+      // Solo notificar que la sesión está lista
       
       notifyListeners();
       return true;
@@ -187,16 +183,16 @@ class SessionProvider extends ChangeNotifier {
         
         // Cargar todos los datos SECUENCIALMENTE con delays para evitar 429
         await _loadCarnetData();
-        await Future.delayed(const Duration(milliseconds: 500)); // Esperar entre llamadas
+        await Future.delayed(const Duration(seconds: 2)); // Esperar 2 segundos entre llamadas
         
         await _loadCitasData();
-        await Future.delayed(const Duration(milliseconds: 500));
+        await Future.delayed(const Duration(seconds: 2));
         
         await _loadConsultasData();
-        await Future.delayed(const Duration(milliseconds: 500));
+        await Future.delayed(const Duration(seconds: 2));
         
         await _loadVacunasData();
-        await Future.delayed(const Duration(milliseconds: 500));
+        await Future.delayed(const Duration(seconds: 2));
         
         await loadPromociones(notifyWhenDone: false);
         
