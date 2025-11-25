@@ -685,22 +685,68 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
               color: Colors.white70,
             ),
           ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: LinearProgressIndicator(
-              value: provider.getProgresoNivel(),
-              backgroundColor: Colors.white30,
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-              minHeight: 8,
+          const SizedBox(height: 16),
+          // Barra de progreso XP más prominente
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white30, width: 2),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '${alebrije.puntosExperiencia} / ${provider.calcularPuntosNecesarios(alebrije.nivelEvolucion)} XP',
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.white70,
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      '⭐ EXPERIENCIA',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    Text(
+                      '${alebrije.puntosExperiencia} / ${provider.calcularPuntosNecesarios(alebrije.nivelEvolucion)}',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.yellowAccent,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: TweenAnimationBuilder<double>(
+                    duration: const Duration(milliseconds: 800),
+                    curve: Curves.easeOutCubic,
+                    tween: Tween(begin: 0, end: provider.getProgresoNivel()),
+                    builder: (context, value, child) {
+                      return LinearProgressIndicator(
+                        value: value,
+                        backgroundColor: Colors.white30,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          value > 0.7 ? Colors.greenAccent : Colors.white
+                        ),
+                        minHeight: 16,
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${(provider.getProgresoNivel() * 100).toStringAsFixed(1)}% al siguiente nivel',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Colors.white60,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1100,7 +1146,13 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                   color: Colors.orange,
                   onTap: () {
                     provider.alimentar(20);
-                    _mostrarXPGanado(15);
+                    final xpBase = 15;
+                    final mult = provider.multiplicadorExperienciaTotal;
+                    final xpTotal = (xpBase * mult).round();
+                    _mostrarXPGanado(
+                      xpTotal, 
+                      bonus: mult > 1.0 ? 'x${mult.toStringAsFixed(1)}' : null
+                    );
                   },
                 ),
               ),
@@ -1112,7 +1164,13 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                   color: Colors.purple,
                   onTap: () {
                     provider.jugar();
-                    _mostrarXPGanado(25);
+                    final xpBase = 25;
+                    final mult = provider.multiplicadorExperienciaTotal;
+                    final xpTotal = (xpBase * mult).round();
+                    _mostrarXPGanado(
+                      xpTotal, 
+                      bonus: mult > 1.0 ? 'x${mult.toStringAsFixed(1)}' : null
+                    );
                   },
                 ),
               ),
@@ -1128,7 +1186,13 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                   color: Colors.red,
                   onTap: () {
                     provider.curar(30);
-                    _mostrarXPGanado(30);
+                    final xpBase = 30;
+                    final mult = provider.multiplicadorExperienciaTotal;
+                    final xpTotal = (xpBase * mult).round();
+                    _mostrarXPGanado(
+                      xpTotal, 
+                      bonus: mult > 1.0 ? 'x${mult.toStringAsFixed(1)}' : null
+                    );
                   },
                 ),
               ),
@@ -1140,7 +1204,13 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                   color: Colors.blue,
                   onTap: () {
                     provider.descansar();
-                    _mostrarXPGanado(20);
+                    final xpBase = 20;
+                    final mult = provider.multiplicadorExperienciaTotal;
+                    final xpTotal = (xpBase * mult).round();
+                    _mostrarXPGanado(
+                      xpTotal, 
+                      bonus: mult > 1.0 ? 'x${mult.toStringAsFixed(1)}' : null
+                    );
                   },
                 ),
               ),

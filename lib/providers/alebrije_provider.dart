@@ -237,11 +237,14 @@ class AlebrijeProvider extends ChangeNotifier {
     // Aplicar multiplicador de cápsulas activas
     final puntosConBonus = (puntos * multiplicadorExperienciaTotal).round();
     
+    print('✨ GANANDO XP: +${puntosConBonus} XP por "$motivo"');
     if (puntosConBonus > puntos) {
       print('⚡ Bonus de cápsulas: ${puntos} XP → ${puntosConBonus} XP (x${multiplicadorExperienciaTotal.toStringAsFixed(2)})');
     }
 
-    final nuevosOPuntos = _alebrije!.puntosExperiencia + puntosConBonus;
+    final xpAnterior = _alebrije!.puntosExperiencia;
+    final nuevosOPuntos = xpAnterior + puntosConBonus;
+    print('📊 XP: $xpAnterior → $nuevosOPuntos');
     final puntosParaNivel = _calcularPuntosNecesarios(_alebrije!.nivelEvolucion);
 
     if (nuevosOPuntos >= puntosParaNivel) {
@@ -371,14 +374,18 @@ class AlebrijeProvider extends ChangeNotifier {
         throw Exception('Sesión expirada - requiere login');
       }
       
-      // 🔥 GUARDAR SOLO EN AZURE - NO EN localStorage
+      // 🔥 GUARDAR EN AZURE (prioridad) + localStorage (respaldo)
       print('🔄 Guardando estado en Azure Cosmos DB...');
+      print('   - Nombre: ${_alebrije!.nombre}');
+      print('   - Nivel: ${_alebrije!.nivelEvolucion}');
+      print('   - XP: ${_alebrije!.puntosExperiencia}');
+      
       await _sincronizarConBackend(token);
       print('✅ Estado guardado EXITOSAMENTE en Azure Cosmos DB');
       
-      // ⚠️ NO GUARDAR EN localStorage - Azure es la única fuente
-      // Si guardamos en localStorage, puede causar conflictos
-      print('🚫 localStorage NO actualizado (Azure es la única fuente)');
+      // 💾 GUARDAR TAMBIÉN EN localStorage como respaldo (previene pérdida de datos)
+      await prefs.setString('alebrije_data', jsonEncode(_alebrije!.toJson()));
+      print('💾 Respaldo guardado en localStorage');
       
       _ultimaActualizacion = DateTime.now();
     } catch (e) {
@@ -575,10 +582,15 @@ class AlebrijeProvider extends ChangeNotifier {
         print('   - Especie: ${_alebrije!.dna.especieBase}');
       } else {
         // Actualizar existente en Cosmos DB
-        await ApiService.updateAlebrije(token, _alebrije!.toJson());
-        print('✅ Alebrije actualizado en Cosmos DB');
+        final jsonData = _alebrije!.toJson();
+        print('📤 ENVIANDO a Cosmos DB:');
         print('   - Nombre: ${_alebrije!.nombre}');
         print('   - Nivel: ${_alebrije!.nivelEvolucion}');
+        print('   - XP: ${_alebrije!.puntosExperiencia}');
+        print('   - Hambre: ${_alebrije!.estado.hambre}');
+        
+        await ApiService.updateAlebrije(token, jsonData);
+        print('✅ Alebrije actualizado EXITOSAMENTE en Cosmos DB');
       }
     } catch (e) {
       // No interrumpir si falla sincronización - localStorage es suficiente

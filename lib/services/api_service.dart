@@ -842,6 +842,13 @@ class ApiService {
   static Future<bool> updateAlebrije(String token, Map<String, dynamic> alebrijeData) async {
     final result = await _retryWithBackoff(
       () async {
+        print('📤 ENVIANDO ACTUALIZACIÓN DE ALEBRIJE:');
+        print('   - Nombre: ${alebrijeData['nombre']}');
+        print('   - Nivel: ${alebrijeData['nivelEvolucion']}');
+        print('   - XP: ${alebrijeData['puntosExperiencia']}');
+        print('   - Hambre: ${alebrijeData['estado']?['hambre']}');
+        print('   - Felicidad: ${alebrijeData['estado']?['felicidad']}');
+        
         final response = await http
             .put(
               Uri.parse('$baseUrl/me/alebrije'),
@@ -859,9 +866,12 @@ class ApiService {
             );
 
         print('🎨 ALEBRIJE UPDATE RESPONSE: ${response.statusCode}');
+        if (response.body.isNotEmpty) {
+          print('📋 RESPONSE BODY: ${response.body}');
+        }
 
         if (response.statusCode == 200) {
-          print('✅ Alebrije actualizado en backend');
+          print('✅ Alebrije actualizado EXITOSAMENTE en backend');
           return true;
         } else if (response.statusCode == 401 || response.statusCode == 403) {
           throw Exception('INVALID_TOKEN: Token inválido');
