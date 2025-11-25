@@ -48524,7 +48524,8 @@ return A.G(null,r)}})
 return A.H($async$$0,r)},
 $S:9}
 A.asN.prototype={
-$0(){return this.a.abu(this.b,this.c)},
+$0(){A.P("\ud83d\udce5 Bot\xf3n de descarga presionado")
+this.a.abu(this.b,this.c)},
 $S:0}
 A.asO.prototype={
 $0(){return this.a.SV(this.b,this.c)},

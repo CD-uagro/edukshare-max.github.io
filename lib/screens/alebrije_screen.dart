@@ -339,7 +339,10 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
           IconButton(
             icon: const Icon(Icons.download, color: Colors.white),
             tooltip: 'Descargar imagen',
-            onPressed: () => _descargarImagenAlebrije(context, alebrije),
+            onPressed: () {
+              print('📥 Botón de descarga presionado');
+              _descargarImagenAlebrije(context, alebrije);
+            },
           ),
           IconButton(
             icon: const Icon(Icons.edit, color: Colors.white),
