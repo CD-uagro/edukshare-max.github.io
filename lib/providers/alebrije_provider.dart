@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/alebrije_model.dart';
 import '../providers/session_provider.dart';
+import '../services/api_service.dart';
 import 'dart:math';
 
 /// Proveedor de estado para el sistema de Alebrije Tamagotchi
@@ -33,8 +34,21 @@ class AlebrijeProvider extends ChangeNotifier {
         print('✅ Alebrije cargado desde localStorage: ${_alebrije!.nombre}');
       }
       
-      // TODO: Intentar cargar desde backend
-      // final alebrijeBackend = await ApiService.getAlebrije();
+      // Intentar cargar desde backend (respaldo)
+      if (_alebrije == null) {
+        try {
+          final token = prefs.getString('auth_token');
+          if (token != null) {
+            final alebrijeBackend = await _cargarDesdeBackend(token);
+            if (alebrijeBackend != null) {
+              _alebrije = alebrijeBackend;
+              print('✅ Alebrije recuperado desde backend');
+            }
+          }
+        } catch (e) {
+          print('⚠️ No se pudo cargar desde backend (normal si es primera vez): $e');
+        }
+      }
       
       if (_alebrije == null) {
         // Generar nuevo alebrije
@@ -186,18 +200,21 @@ class AlebrijeProvider extends ChangeNotifier {
     print('✨ Animación de evolución - Nivel $nivel');
   }
 
-  /// Guarda el estado del alebrije en el backend
+  /// Guarda el estado del alebrije en localStorage y backend
   Future<void> _guardarEstado() async {
     if (_alebrije == null) return;
     
     try {
-      // Guardar en localStorage primero (no requiere backend)
+      // Guardar en localStorage primero (respaldo principal)
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('alebrije_data', jsonEncode(_alebrije!.toJson()));
-      print('💾 Guardando estado del alebrije en localStorage: ${_alebrije!.id}');
+      print('💾 Alebrije guardado en localStorage: ${_alebrije!.id}');
       
-      // TODO: Sincronizar con backend cuando esté disponible
-      // await ApiService.updateAlebrije(_alebrije!.toJson());
+      // Sincronizar con backend (respaldo secundario)
+      final token = prefs.getString('auth_token');
+      if (token != null) {
+        await _sincronizarConBackend(token);
+      }
       
       _ultimaActualizacion = DateTime.now();
     } catch (e) {
@@ -302,6 +319,43 @@ class AlebrijeProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final coleccion = prefs.getStringList('coleccion_alebrijes') ?? [];
     return coleccion.map((json) => AlebrijeModel.fromJson(jsonDecode(json))).toList();
+  }
+
+  /// Carga alebrije desde backend
+  Future<AlebrijeModel?> _cargarDesdeBackend(String token) async {
+    try {
+      final data = await ApiService.getAlebrije(token);
+      if (data != null) {
+        return AlebrijeModel.fromJson(data);
+      }
+      return null;
+    } catch (e) {
+      print('❌ Error cargando desde backend: $e');
+      return null;
+    }
+  }
+
+  /// Sincroniza alebrije con backend
+  Future<void> _sincronizarConBackend(String token) async {
+    if (_alebrije == null) return;
+    
+    try {
+      // Verificar si ya existe en backend
+      final existeEnBackend = await ApiService.getAlebrije(token);
+      
+      if (existeEnBackend == null) {
+        // Crear nuevo
+        await ApiService.createAlebrije(token, _alebrije!.toJson());
+        print('🔄 Alebrije creado en backend (primera sincronización)');
+      } else {
+        // Actualizar existente
+        await ApiService.updateAlebrije(token, _alebrije!.toJson());
+        print('🔄 Alebrije sincronizado con backend');
+      }
+    } catch (e) {
+      // No interrumpir si falla sincronización - localStorage es suficiente
+      print('⚠️ Sincronización con backend falló (continuando con localStorage): $e');
+    }
   }
 }
 

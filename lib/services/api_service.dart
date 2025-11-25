@@ -690,4 +690,165 @@ class ApiService {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // 🎨 ALEBRIJES - SISTEMA TAMAGOTCHI
+  // ═══════════════════════════════════════════════════════════
+
+  /// GET /me/alebrije - Obtener alebrije del usuario
+  static Future<Map<String, dynamic>?> getAlebrije(String token) async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/me/alebrije'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(
+            normalTimeout,
+            onTimeout: () {
+              throw Exception('TIMEOUT: Timeout obteniendo alebrije');
+            },
+          );
+
+      print('🎨 ALEBRIJE GET RESPONSE: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true && data['data'] != null) {
+          print('✅ Alebrije cargado desde backend');
+          return data['data'] as Map<String, dynamic>;
+        }
+        return null;
+      } else if (response.statusCode == 404) {
+        print('📭 No hay alebrije en backend (normal para nuevo usuario)');
+        return null;
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        throw Exception('INVALID_TOKEN: Token inválido');
+      } else {
+        print('⚠️ Error obteniendo alebrije: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Error obteniendo alebrije: $e');
+      return null;
+    }
+  }
+
+  /// POST /me/alebrije - Crear nuevo alebrije
+  static Future<bool> createAlebrije(String token, Map<String, dynamic> alebrijeData) async {
+    final result = await _retryWithBackoff(
+      () async {
+        final response = await http
+            .post(
+              Uri.parse('$baseUrl/me/alebrije'),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $token',
+              },
+              body: jsonEncode(alebrijeData),
+            )
+            .timeout(
+              normalTimeout,
+              onTimeout: () {
+                throw Exception('TIMEOUT: Timeout creando alebrije');
+              },
+            );
+
+        print('🎨 ALEBRIJE CREATE RESPONSE: ${response.statusCode}');
+
+        if (response.statusCode == 200 || response.statusCode == 201) {
+          print('✅ Alebrije creado en backend');
+          return true;
+        } else if (response.statusCode == 401 || response.statusCode == 403) {
+          throw Exception('INVALID_TOKEN: Token inválido');
+        } else {
+          print('⚠️ Error creando alebrije: ${response.statusCode}');
+          return false;
+        }
+      },
+      operationName: 'CREATE alebrije',
+    );
+    return result ?? false;
+  }
+
+  /// PUT /me/alebrije - Actualizar alebrije existente
+  static Future<bool> updateAlebrije(String token, Map<String, dynamic> alebrijeData) async {
+    final result = await _retryWithBackoff(
+      () async {
+        final response = await http
+            .put(
+              Uri.parse('$baseUrl/me/alebrije'),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $token',
+              },
+              body: jsonEncode(alebrijeData),
+            )
+            .timeout(
+              normalTimeout,
+              onTimeout: () {
+                throw Exception('TIMEOUT: Timeout actualizando alebrije');
+              },
+            );
+
+        print('🎨 ALEBRIJE UPDATE RESPONSE: ${response.statusCode}');
+
+        if (response.statusCode == 200) {
+          print('✅ Alebrije actualizado en backend');
+          return true;
+        } else if (response.statusCode == 401 || response.statusCode == 403) {
+          throw Exception('INVALID_TOKEN: Token inválido');
+        } else {
+          print('⚠️ Error actualizando alebrije: ${response.statusCode}');
+          return false;
+        }
+      },
+      operationName: 'UPDATE alebrije',
+    );
+    return result ?? false;
+  }
+
+  /// POST /me/alebrije/interaccion - Registrar interacción (alimentar, jugar, etc.)
+  static Future<bool> registrarInteraccion(
+    String token,
+    String tipo,
+    int cantidad,
+  ) async {
+    final result = await _retryWithBackoff(
+      () async {
+        final response = await http
+            .post(
+              Uri.parse('$baseUrl/me/alebrije/interaccion'),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $token',
+              },
+              body: jsonEncode({
+                'tipo': tipo,
+                'cantidad': cantidad,
+              }),
+            )
+            .timeout(
+              shortTimeout,
+              onTimeout: () {
+                throw Exception('TIMEOUT: Timeout registrando interacción');
+              },
+            );
+
+        if (response.statusCode == 200) {
+          print('✅ Interacción registrada: $tipo');
+          return true;
+        } else {
+          print('⚠️ Error registrando interacción: ${response.statusCode}');
+          return false;
+        }
+      },
+      operationName: 'INTERACCION alebrije',
+      maxAttempts: 1, // No reintentar interacciones, es opcional
+    );
+    return result ?? false;
+  }
+
 }
