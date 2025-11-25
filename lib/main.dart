@@ -4,10 +4,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:carnet_digital_uagro/providers/session_provider.dart';
+import 'package:carnet_digital_uagro/providers/alebrije_provider.dart';
 import 'package:carnet_digital_uagro/screens/login_screen.dart';
 import 'package:carnet_digital_uagro/screens/register_screen.dart';
 import 'package:carnet_digital_uagro/screens/carnet_selector_screen.dart';
 import 'package:carnet_digital_uagro/screens/vacunas_screen.dart';
+import 'package:carnet_digital_uagro/screens/alebrije_screen.dart';
 import 'package:carnet_digital_uagro/theme/uagro_theme.dart';
 
 void main() {
@@ -19,8 +21,11 @@ class CarnetDigitalApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (context) => SessionProvider(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => SessionProvider()),
+        ChangeNotifierProvider(create: (context) => AlebrijeProvider()),
+      ],
       child: MaterialApp(
         title: 'Carnet Digital UAGro',
         theme: UAGroTheme.lightTheme,
@@ -30,6 +35,7 @@ class CarnetDigitalApp extends StatelessWidget {
           '/register': (context) => const RegisterScreen(),
           '/carnet': (context) => const CarnetSelectorScreen(),
           '/vacunas': (context) => const VacunasScreen(),
+          '/alebrije': (context) => const AlebrijeScreen(),
         },
         debugShowCheckedModeBanner: false,
       ),

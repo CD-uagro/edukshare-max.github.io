@@ -1,0 +1,335 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../models/alebrije_model.dart';
+import '../providers/session_provider.dart';
+import 'dart:math';
+
+/// Proveedor de estado para el sistema de Alebrije Tamagotchi
+class AlebrijeProvider extends ChangeNotifier {
+  AlebrijeModel? _alebrije;
+  bool _isLoading = false;
+  String? _error;
+  DateTime _ultimaActualizacion = DateTime.now();
+
+  AlebrijeModel? get alebrije => _alebrije;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+  
+  /// Genera o recupera el alebrije del estudiante
+  Future<void> inicializarAlebrije(String matricula, {String? especieBase}) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      // TODO: Intentar cargar desde backend primero
+      // Si no existe, generar uno nuevo
+      
+      if (_alebrije == null) {
+        // Generar nuevo alebrije
+        final especies = ['jaguar', 'aguila', 'serpiente', 'venado', 'colibri'];
+        final especieSeleccionada = especieBase ?? especies[Random().nextInt(especies.length)];
+        
+        _alebrije = AlebrijeModel.generar(
+          matricula: matricula,
+          especieBase: especieSeleccionada,
+        );
+        
+        print('🎨 Alebrije generado: ${_alebrije!.nombre} (${_alebrije!.dna.especieBase})');
+      }
+
+      // Aplicar decaimiento desde última actualización
+      _alebrije = _alebrije!.copyWith(
+        estado: _alebrije!.estado.aplicarDecaimiento(),
+        updatedAt: DateTime.now(),
+      );
+
+      _ultimaActualizacion = DateTime.now();
+      _isLoading = false;
+      notifyListeners();
+
+      // Verificar si necesita atención
+      _verificarNecesidadesYNotificar();
+    } catch (e) {
+      _error = 'Error al inicializar alebrije: $e';
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Alimenta al alebrije (se activa con consultas médicas)
+  Future<void> alimentar(int cantidad) async {
+    if (_alebrije == null) return;
+
+    _alebrije = _alebrije!.copyWith(
+      estado: _alebrije!.estado.alimentar(cantidad),
+      updatedAt: DateTime.now(),
+    );
+
+    await _guardarEstado();
+    notifyListeners();
+  }
+
+  /// Jugar con el alebrije
+  Future<void> jugar() async {
+    if (_alebrije == null) return;
+
+    _alebrije = _alebrije!.copyWith(
+      estado: _alebrije!.estado.jugar(),
+      updatedAt: DateTime.now(),
+    );
+
+    await _guardarEstado();
+    notifyListeners();
+  }
+
+  /// Curar al alebrije (se activa con vacunas)
+  Future<void> curar(int cantidad) async {
+    if (_alebrije == null) return;
+
+    _alebrije = _alebrije!.copyWith(
+      estado: _alebrije!.estado.curar(cantidad),
+      updatedAt: DateTime.now(),
+    );
+
+    await _guardarEstado();
+    notifyListeners();
+  }
+
+  /// Descansar (recuperar energía)
+  Future<void> descansar() async {
+    if (_alebrije == null) return;
+
+    _alebrije = _alebrije!.copyWith(
+      estado: _alebrije!.estado.descansar(),
+      updatedAt: DateTime.now(),
+    );
+
+    await _guardarEstado();
+    notifyListeners();
+  }
+
+  /// Agregar experiencia y verificar evolución
+  Future<void> agregarExperiencia(int puntos, String motivo) async {
+    if (_alebrije == null) return;
+
+    final nuevosOPuntos = _alebrije!.puntosExperiencia + puntos;
+    final puntosParaNivel = _calcularPuntosNecesarios(_alebrije!.nivelEvolucion);
+
+    if (nuevosOPuntos >= puntosParaNivel) {
+      // ¡Evolución!
+      await _evolucionar(motivo);
+    } else {
+      _alebrije = _alebrije!.copyWith(
+        puntosExperiencia: nuevosOPuntos,
+        updatedAt: DateTime.now(),
+      );
+      
+      await _guardarEstado();
+      notifyListeners();
+    }
+  }
+
+  int _calcularPuntosNecesarios(int nivel) {
+    // Fórmula exponencial: 100 * (nivel ^ 1.5)
+    return (100 * pow(nivel, 1.5)).round();
+  }
+
+  /// Evoluciona el alebrije con mutaciones genéticas
+  Future<void> _evolucionar(String motivo) async {
+    if (_alebrije == null) return;
+
+    final nuevoNivel = _alebrije!.nivelEvolucion + 1;
+    final intensidadMutacion = 0.2 + (nuevoNivel * 0.05); // Más intenso en niveles altos
+    final random = Random(DateTime.now().millisecondsSinceEpoch);
+
+    // Mutar DNA
+    final nuevoDNA = _alebrije!.dna.mutar(random, intensidadMutacion.clamp(0.0, 0.8));
+
+    // Agregar a historial
+    final nuevaEvolucion = EvolucionHistorial(
+      nivel: nuevoNivel,
+      fecha: DateTime.now(),
+      descripcion: motivo,
+    );
+
+    _alebrije = _alebrije!.copyWith(
+      dna: nuevoDNA,
+      nivelEvolucion: nuevoNivel,
+      puntosExperiencia: 0,
+      historialEvoluciones: [..._alebrije!.historialEvoluciones, nuevaEvolucion],
+      updatedAt: DateTime.now(),
+    );
+
+    print('🎉 ¡Evolución! Nivel $nuevoNivel alcanzado: $motivo');
+    
+    await _guardarEstado();
+    notifyListeners();
+
+    // Mostrar notificación visual de evolución
+    _mostrarNotificacionEvolucion(nuevoNivel);
+  }
+
+  void _mostrarNotificacionEvolucion(int nivel) {
+    // TODO: Implementar animación de evolución visual
+    print('✨ Animación de evolución - Nivel $nivel');
+  }
+
+  /// Guarda el estado del alebrije en el backend
+  Future<void> _guardarEstado() async {
+    if (_alebrije == null) return;
+    
+    try {
+      // TODO: Implementar guardado en Cosmos DB
+      print('💾 Guardando estado del alebrije: ${_alebrije!.id}');
+      _ultimaActualizacion = DateTime.now();
+    } catch (e) {
+      print('❌ Error al guardar estado: $e');
+    }
+  }
+
+  /// Verifica necesidades y genera notificaciones
+  void _verificarNecesidadesYNotificar() {
+    if (_alebrije == null) return;
+
+    final necesidades = <String>[];
+
+    if (_alebrije!.estado.hambre < 30) {
+      necesidades.add('Tu alebrije tiene hambre 🍽️');
+    }
+    if (_alebrije!.estado.felicidad < 30) {
+      necesidades.add('Tu alebrije se siente solo 😢');
+    }
+    if (_alebrije!.estado.salud < 30) {
+      necesidades.add('Tu alebrije necesita atención médica 🏥');
+    }
+    if (_alebrije!.estado.energia < 30) {
+      necesidades.add('Tu alebrije necesita descansar 😴');
+    }
+
+    if (necesidades.isNotEmpty) {
+      print('⚠️ Necesidades del alebrije: ${necesidades.join(', ')}');
+      // TODO: Implementar notificaciones push
+    }
+  }
+
+  /// Actualiza el estado aplicando decaimiento natural
+  Future<void> actualizarEstado() async {
+    if (_alebrije == null) return;
+
+    final ahora = DateTime.now();
+    final horasTranscurridas = ahora.difference(_ultimaActualizacion).inHours;
+
+    if (horasTranscurridas >= 1) {
+      _alebrije = _alebrije!.copyWith(
+        estado: _alebrije!.estado.aplicarDecaimiento(),
+        updatedAt: ahora,
+      );
+
+      _ultimaActualizacion = ahora;
+      await _guardarEstado();
+      notifyListeners();
+
+      _verificarNecesidadesYNotificar();
+    }
+  }
+
+  /// Obtiene el título del nivel de evolución
+  String getNombreNivel(int nivel) {
+    if (nivel <= 1) return '🥚 Huevo Místico';
+    if (nivel <= 3) return '🌱 Criatura Naciente';
+    if (nivel <= 5) return '🌟 Espíritu en Crecimiento';
+    if (nivel <= 7) return '✨ Guardián Joven';
+    if (nivel <= 10) return '🔥 Protector Ancestral';
+    if (nivel <= 15) return '👑 Alebrije Legendario';
+    return '🌌 Leyenda Viviente';
+  }
+
+  /// Calcula el progreso hacia el siguiente nivel (0.0 - 1.0)
+  double getProgresoNivel() {
+    if (_alebrije == null) return 0.0;
+    final necesarios = _calcularPuntosNecesarios(_alebrije!.nivelEvolucion);
+    return (_alebrije!.puntosExperiencia / necesarios).clamp(0.0, 1.0);
+  }
+
+  /// Exponer método de cálculo de puntos (para uso en UI)
+  int calcularPuntosNecesarios(int nivel) {
+    return _calcularPuntosNecesarios(nivel);
+  }
+}
+
+/// Extensión para copiar AlebrijeModel con cambios
+extension AlebrijeModelCopyWith on AlebrijeModel {
+  AlebrijeModel copyWith({
+    String? id,
+    String? matricula,
+    String? nombre,
+    AlebrijeDNA? dna,
+    AlebrijeEstado? estado,
+    List<EvolucionHistorial>? historialEvoluciones,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    int? nivelEvolucion,
+    int? puntosExperiencia,
+  }) {
+    return AlebrijeModel(
+      id: id ?? this.id,
+      matricula: matricula ?? this.matricula,
+      nombre: nombre ?? this.nombre,
+      dna: dna ?? this.dna,
+      estado: estado ?? this.estado,
+      historialEvoluciones: historialEvoluciones ?? this.historialEvoluciones,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      nivelEvolucion: nivelEvolucion ?? this.nivelEvolucion,
+      puntosExperiencia: puntosExperiencia ?? this.puntosExperiencia,
+    );
+  }
+}
+
+/// Widget para integrar en SessionProvider y conectar con actividades de salud
+class AlebrijeHealthIntegration {
+  final AlebrijeProvider alebrijeProvider;
+
+  AlebrijeHealthIntegration(this.alebrijeProvider);
+
+  /// Se llama cuando el usuario tiene una consulta médica
+  Future<void> onConsultaMedica() async {
+    await alebrijeProvider.alimentar(30); // +30 hambre
+    await alebrijeProvider.agregarExperiencia(50, 'Consulta médica realizada');
+    print('🍽️ Alebrije alimentado por consulta médica');
+  }
+
+  /// Se llama cuando el usuario recibe una vacuna
+  Future<void> onVacuna() async {
+    await alebrijeProvider.curar(40); // +40 salud
+    await alebrijeProvider.agregarExperiencia(100, 'Vacuna administrada');
+    print('💉 Alebrije curado por vacuna');
+  }
+
+  /// Se llama cuando el usuario completa un curso (SaberesMX)
+  Future<void> onCursoCompletado(String nombreCurso) async {
+    await alebrijeProvider.jugar(); // +20 felicidad
+    await alebrijeProvider.agregarExperiencia(150, 'Curso completado: $nombreCurso');
+    print('📚 Alebrije recompensado por curso completado');
+  }
+
+  /// Se llama cuando el usuario se registra como donante de órganos
+  Future<void> onDonacionOrganos() async {
+    await alebrijeProvider.curar(50);
+    await alebrijeProvider.agregarExperiencia(250, 'Registro como donante de órganos');
+    print('❤️ Alebrije recompensado por compromiso solidario');
+  }
+
+  /// Se llama cuando el usuario abre la app diariamente (racha)
+  Future<void> onAbrirAppDiario() async {
+    await alebrijeProvider.actualizarEstado();
+    
+    final diasConsecutivos = alebrijeProvider.alebrije?.estado.diasConsecutivos ?? 0;
+    if (diasConsecutivos > 1) {
+      final bonus = (diasConsecutivos * 10).clamp(0, 100);
+      await alebrijeProvider.agregarExperiencia(bonus, 'Racha de $diasConsecutivos días');
+      print('🔥 Bonus por racha: $diasConsecutivos días consecutivos');
+    }
+  }
+}

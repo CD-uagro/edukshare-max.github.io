@@ -55,6 +55,9 @@ dependencies:
   # QR Code Generation
   qr_flutter: ^4.1.0
   
+  # SVG rendering para alebrijes
+  flutter_svg: ^2.0.10
+  
   # URL Launcher para abrir enlaces externos
   url_launcher: ^6.2.5
 
