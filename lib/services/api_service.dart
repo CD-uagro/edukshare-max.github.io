@@ -759,9 +759,17 @@ class ApiService {
           );
 
       print('🎨 ALEBRIJE GET RESPONSE: ${response.statusCode}');
+      print('📦 RESPONSE BODY LENGTH: ${response.body.length} bytes');
 
       if (response.statusCode == 200) {
+        print('📋 RESPONSE BODY: ${response.body.substring(0, response.body.length > 500 ? 500 : response.body.length)}...');
+        
         final data = jsonDecode(response.body);
+        print('🔍 PARSED DATA KEYS: ${data.keys.toList()}');
+        print('🔍 data["success"]: ${data['success']}');
+        print('🔍 data["data"]: ${data['data'] != null ? "EXISTS" : "NULL"}');
+        print('🔍 data["id"]: ${data['id']}');
+        print('🔍 data["matricula"]: ${data['matricula']}');
         
         // Manejar dos formatos de respuesta:
         // Formato 1: {"success": true, "data": {...alebrije...}}
@@ -780,6 +788,7 @@ class ApiService {
         }
         
         print('⚠️ Backend devolvió 200 pero formato no reconocido');
+        print('   Contenido completo: ${response.body}');
         return null;
       } else if (response.statusCode == 404) {
         print('📭 No hay alebrije en backend (normal para nuevo usuario)');

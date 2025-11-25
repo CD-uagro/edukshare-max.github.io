@@ -58,11 +58,15 @@ class AlebrijeProvider extends ChangeNotifier {
         return;
       }
       
+      print('🔑 Token disponible, intentando cargar desde Azure...');
+      print('   Matrícula del usuario: $matricula');
+      
       AlebrijeModel? alebrijeBackend;
       try {
         alebrijeBackend = await _cargarDesdeBackend(token);
+        print('📊 Resultado de _cargarDesdeBackend: ${alebrijeBackend != null ? "ENCONTRADO" : "NULL"}');
       } catch (e) {
-        print('❌ Error al cargar desde Cosmos DB: $e');
+        print('❌ EXCEPCIÓN al cargar desde Cosmos DB: $e');
         _error = 'No se pudo conectar con el servidor. Verifica tu conexión.';
         _isLoading = false;
         notifyListeners();
@@ -71,10 +75,12 @@ class AlebrijeProvider extends ChangeNotifier {
       
       if (alebrijeBackend != null) {
         // ✅ COSMOS DB TIENE DATOS - ESTA ES LA VERDAD ABSOLUTA
-        print('✅ Alebrije recuperado desde Cosmos DB (Azure)');
+        print('✅ ALEBRIJE RECUPERADO DESDE COSMOS DB (Azure)');
+        print('   - ID: ${alebrijeBackend.id}');
         print('   - Nombre: ${alebrijeBackend.nombre}');
         print('   - Nivel: ${alebrijeBackend.nivelEvolucion}');
         print('   - DNA: ${alebrijeBackend.dna.especieBase}');
+        print('   - XP: ${alebrijeBackend.puntosExperiencia}');
         
         // ⚠️ BORRAR SIEMPRE localStorage para evitar conflictos
         print('🗑️ Borrando localStorage anterior (Azure es la única fuente)');
@@ -112,7 +118,11 @@ class AlebrijeProvider extends ChangeNotifier {
       // PRIORIDAD 2: No existe en Cosmos DB - usuario nuevo debe elegir especie
       // Si especieBase es null, el usuario debe elegir primero
       if (especieBase == null) {
-        print('🎨 Usuario nuevo: debe elegir especie de alebrije');
+        print('🎨 ===== MOSTRANDO SELECCIÓN DE ESPECIE =====');
+        print('   Razón: alebrijeBackend es NULL');
+        print('   Matrícula consultada: $matricula');
+        print('   ⚠️ PROBLEMA: El alebrije debería existir en Azure pero no se encontró');
+        print('   Verifica que el backend esté guardando correctamente en Cosmos DB');
         _alebrije = null; // Mantener null para mostrar diálogo de selección
         _isLoading = false;
         notifyListeners();
@@ -552,13 +562,27 @@ class AlebrijeProvider extends ChangeNotifier {
   /// Carga alebrije desde backend
   Future<AlebrijeModel?> _cargarDesdeBackend(String token) async {
     try {
+      print('🔍 Intentando cargar alebrije desde Cosmos DB...');
       final data = await ApiService.getAlebrije(token);
-      if (data != null) {
-        return AlebrijeModel.fromJson(data);
+      
+      if (data == null) {
+        print('⚠️ ApiService.getAlebrije devolvió null - No existe alebrije en Cosmos DB');
+        return null;
       }
-      return null;
-    } catch (e) {
-      print('❌ Error cargando desde backend: $e');
+      
+      print('📦 Data recibida de Cosmos DB:');
+      print('   - Tipo: ${data.runtimeType}');
+      print('   - Keys: ${data.keys.toList()}');
+      print('   - Nombre: ${data['nombre']}');
+      print('   - Matrícula: ${data['matricula']}');
+      
+      final alebrije = AlebrijeModel.fromJson(data);
+      print('✅ Alebrije parseado exitosamente: ${alebrije.nombre}');
+      return alebrije;
+      
+    } catch (e, stackTrace) {
+      print('❌ ERROR CRÍTICO cargando desde backend: $e');
+      print('📍 StackTrace: $stackTrace');
       return null;
     }
   }
