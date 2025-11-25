@@ -562,6 +562,12 @@ class AlebrijeEstado {
   final DateTime ultimaInteraccion;
   final DateTime ultimoCuidado;
   final int diasConsecutivos; // Racha de interacción diaria
+  
+  // 🚨 Sistema de límites y equilibrio
+  final int alimentacionesHoy; // Contador diario (max 5)
+  final int juegosHoy; // Contador diario (max 8)
+  final int curacionesHoy; // Contador diario (max 3)
+  final DateTime ultimaAccionFecha; // Para resetear contadores
 
   AlebrijeEstado({
     required this.hambre,
@@ -572,7 +578,11 @@ class AlebrijeEstado {
     required this.ultimaInteraccion,
     required this.ultimoCuidado,
     this.diasConsecutivos = 0,
-  });
+    this.alimentacionesHoy = 0,
+    this.juegosHoy = 0,
+    this.curacionesHoy = 0,
+    DateTime? ultimaAccionFecha,
+  }) : ultimaAccionFecha = ultimaAccionFecha ?? DateTime.now();
 
   factory AlebrijeEstado.fromJson(Map<String, dynamic> json) {
     return AlebrijeEstado(
@@ -584,6 +594,12 @@ class AlebrijeEstado {
       ultimaInteraccion: DateTime.parse(json['ultimaInteraccion'] ?? DateTime.now().toIso8601String()),
       ultimoCuidado: DateTime.parse(json['ultimoCuidado'] ?? DateTime.now().toIso8601String()),
       diasConsecutivos: json['diasConsecutivos'] ?? 0,
+      alimentacionesHoy: json['alimentacionesHoy'] ?? 0,
+      juegosHoy: json['juegosHoy'] ?? 0,
+      curacionesHoy: json['curacionesHoy'] ?? 0,
+      ultimaAccionFecha: json['ultimaAccionFecha'] != null 
+        ? DateTime.parse(json['ultimaAccionFecha']) 
+        : DateTime.now(),
     );
   }
 
@@ -596,6 +612,10 @@ class AlebrijeEstado {
     'ultimaInteraccion': ultimaInteraccion.toIso8601String(),
     'ultimoCuidado': ultimoCuidado.toIso8601String(),
     'diasConsecutivos': diasConsecutivos,
+    'alimentacionesHoy': alimentacionesHoy,
+    'juegosHoy': juegosHoy,
+    'curacionesHoy': curacionesHoy,
+    'ultimaAccionFecha': ultimaAccionFecha.toIso8601String(),
   };
 
   factory AlebrijeEstado.inicial() {
@@ -609,7 +629,38 @@ class AlebrijeEstado {
       ultimaInteraccion: now,
       ultimoCuidado: now,
       diasConsecutivos: 1,
+      alimentacionesHoy: 0,
+      juegosHoy: 0,
+      curacionesHoy: 0,
+      ultimaAccionFecha: now,
     );
+  }
+
+  /// Verifica si es un nuevo día y resetea contadores
+  AlebrijeEstado _resetearSiNuevoDia() {
+    final ahora = DateTime.now();
+    final esNuevoDia = ahora.day != ultimaAccionFecha.day || 
+                       ahora.month != ultimaAccionFecha.month || 
+                       ahora.year != ultimaAccionFecha.year;
+    
+    if (esNuevoDia) {
+      print('📅 Nuevo día detectado - Reseteando contadores de acciones');
+      return AlebrijeEstado(
+        hambre: hambre,
+        felicidad: felicidad,
+        salud: salud,
+        energia: energia,
+        ultimaAlimentacion: ultimaAlimentacion,
+        ultimaInteraccion: ultimaInteraccion,
+        ultimoCuidado: ultimoCuidado,
+        diasConsecutivos: diasConsecutivos,
+        alimentacionesHoy: 0,
+        juegosHoy: 0,
+        curacionesHoy: 0,
+        ultimaAccionFecha: ahora,
+      );
+    }
+    return this;
   }
 
   /// Calcula el decaimiento natural basado en tiempo transcurrido
@@ -634,7 +685,11 @@ class AlebrijeEstado {
       ultimaInteraccion: ultimaInteraccion,
       ultimoCuidado: ultimoCuidado,
       diasConsecutivos: _calcularDiasConsecutivos(now),
-    );
+      alimentacionesHoy: alimentacionesHoy,
+      juegosHoy: juegosHoy,
+      curacionesHoy: curacionesHoy,
+      ultimaAccionFecha: ultimaAccionFecha,
+    )._resetearSiNuevoDia();
   }
 
   int _calcularDiasConsecutivos(DateTime now) {
@@ -645,58 +700,144 @@ class AlebrijeEstado {
   }
 
   /// Alimentar al alebrije (usando consultas médicas)
+  /// 🚨 LÍMITE: 5 alimentaciones por día. Exceso causa enfermedad.
   AlebrijeEstado alimentar(int cantidad) {
+    final estadoActualizado = _resetearSiNuevoDia();
+    
+    // ⚠️ EXCESO DE COMIDA = ENFERMEDAD
+    if (estadoActualizado.alimentacionesHoy >= 5) {
+      print('🤢 ¡SOBREALIMENTADO! Perdiendo salud por exceso');
+      return AlebrijeEstado(
+        hambre: 100, // Lleno
+        felicidad: (estadoActualizado.felicidad - 20).clamp(0, 100), // Incómodo
+        salud: (estadoActualizado.salud - 15).clamp(0, 100), // 🤢 ENFERMO
+        energia: (estadoActualizado.energia - 10).clamp(0, 100), // Letárgico
+        ultimaAlimentacion: DateTime.now(),
+        ultimaInteraccion: DateTime.now(),
+        ultimoCuidado: estadoActualizado.ultimoCuidado,
+        diasConsecutivos: estadoActualizado.diasConsecutivos,
+        alimentacionesHoy: estadoActualizado.alimentacionesHoy + 1,
+        juegosHoy: estadoActualizado.juegosHoy,
+        curacionesHoy: estadoActualizado.curacionesHoy,
+        ultimaAccionFecha: DateTime.now(),
+      );
+    }
+    
+    // Alimentación normal
     return AlebrijeEstado(
-      hambre: (hambre + cantidad).clamp(0, 100),
-      felicidad: (felicidad + (cantidad * 0.3).round()).clamp(0, 100),
-      salud: salud,
-      energia: energia,
+      hambre: (estadoActualizado.hambre + cantidad).clamp(0, 100),
+      felicidad: (estadoActualizado.felicidad + (cantidad * 0.3).round()).clamp(0, 100),
+      salud: estadoActualizado.salud,
+      energia: estadoActualizado.energia,
       ultimaAlimentacion: DateTime.now(),
       ultimaInteraccion: DateTime.now(),
-      ultimoCuidado: ultimoCuidado,
-      diasConsecutivos: diasConsecutivos,
+      ultimoCuidado: estadoActualizado.ultimoCuidado,
+      diasConsecutivos: estadoActualizado.diasConsecutivos,
+      alimentacionesHoy: estadoActualizado.alimentacionesHoy + 1,
+      juegosHoy: estadoActualizado.juegosHoy,
+      curacionesHoy: estadoActualizado.curacionesHoy,
+      ultimaAccionFecha: DateTime.now(),
     );
   }
 
   /// Jugar con el alebrije
+  /// 🚨 LÍMITE: 8 juegos por día. Exceso causa agotamiento extremo.
   AlebrijeEstado jugar() {
+    final estadoActualizado = _resetearSiNuevoDia();
+    
+    // ⚠️ EXCESO DE JUEGO = AGOTAMIENTO
+    if (estadoActualizado.juegosHoy >= 8) {
+      print('😴 ¡AGOTADO! Demasiado juego, perdiendo energía y salud');
+      return AlebrijeEstado(
+        hambre: (estadoActualizado.hambre - 20).clamp(0, 100), // Mucha hambre
+        felicidad: (estadoActualizado.felicidad - 15).clamp(0, 100), // Cansado de jugar
+        salud: (estadoActualizado.salud - 10).clamp(0, 100), // 😰 AGOTADO
+        energia: 0, // SIN ENERGÍA
+        ultimaAlimentacion: estadoActualizado.ultimaAlimentacion,
+        ultimaInteraccion: DateTime.now(),
+        ultimoCuidado: estadoActualizado.ultimoCuidado,
+        diasConsecutivos: estadoActualizado.diasConsecutivos,
+        alimentacionesHoy: estadoActualizado.alimentacionesHoy,
+        juegosHoy: estadoActualizado.juegosHoy + 1,
+        curacionesHoy: estadoActualizado.curacionesHoy,
+        ultimaAccionFecha: DateTime.now(),
+      );
+    }
+    
+    // Juego normal
     return AlebrijeEstado(
-      hambre: (hambre - 10).clamp(0, 100),
-      felicidad: (felicidad + 20).clamp(0, 100),
-      salud: (salud + 5).clamp(0, 100),
-      energia: (energia - 15).clamp(0, 100),
-      ultimaAlimentacion: ultimaAlimentacion,
+      hambre: (estadoActualizado.hambre - 10).clamp(0, 100),
+      felicidad: (estadoActualizado.felicidad + 20).clamp(0, 100),
+      salud: (estadoActualizado.salud + 5).clamp(0, 100),
+      energia: (estadoActualizado.energia - 15).clamp(0, 100),
+      ultimaAlimentacion: estadoActualizado.ultimaAlimentacion,
       ultimaInteraccion: DateTime.now(),
-      ultimoCuidado: ultimoCuidado,
-      diasConsecutivos: diasConsecutivos,
+      ultimoCuidado: estadoActualizado.ultimoCuidado,
+      diasConsecutivos: estadoActualizado.diasConsecutivos,
+      alimentacionesHoy: estadoActualizado.alimentacionesHoy,
+      juegosHoy: estadoActualizado.juegosHoy + 1,
+      curacionesHoy: estadoActualizado.curacionesHoy,
+      ultimaAccionFecha: DateTime.now(),
     );
   }
 
   /// Curar al alebrije (usando vacunas)
+  /// 🚨 LÍMITE: 3 curaciones por día. Exceso no tiene efecto.
   AlebrijeEstado curar(int cantidad) {
+    final estadoActualizado = _resetearSiNuevoDia();
+    
+    // ⚠️ EXCESO DE MEDICACIÓN = SIN EFECTO
+    if (estadoActualizado.curacionesHoy >= 3) {
+      print('💊 Demasiadas medicinas hoy - Sin efecto');
+      return AlebrijeEstado(
+        hambre: estadoActualizado.hambre,
+        felicidad: (estadoActualizado.felicidad - 5).clamp(0, 100), // Molesto
+        salud: estadoActualizado.salud, // SIN EFECTO
+        energia: estadoActualizado.energia,
+        ultimaAlimentacion: estadoActualizado.ultimaAlimentacion,
+        ultimaInteraccion: DateTime.now(),
+        ultimoCuidado: DateTime.now(),
+        diasConsecutivos: estadoActualizado.diasConsecutivos,
+        alimentacionesHoy: estadoActualizado.alimentacionesHoy,
+        juegosHoy: estadoActualizado.juegosHoy,
+        curacionesHoy: estadoActualizado.curacionesHoy + 1,
+        ultimaAccionFecha: DateTime.now(),
+      );
+    }
+    
+    // Curación normal
     return AlebrijeEstado(
-      hambre: hambre,
-      felicidad: (felicidad + (cantidad * 0.2).round()).clamp(0, 100),
-      salud: (salud + cantidad).clamp(0, 100),
-      energia: (energia + (cantidad * 0.5).round()).clamp(0, 100),
-      ultimaAlimentacion: ultimaAlimentacion,
+      hambre: estadoActualizado.hambre,
+      felicidad: (estadoActualizado.felicidad + (cantidad * 0.2).round()).clamp(0, 100),
+      salud: (estadoActualizado.salud + cantidad).clamp(0, 100),
+      energia: (estadoActualizado.energia + (cantidad * 0.5).round()).clamp(0, 100),
+      ultimaAlimentacion: estadoActualizado.ultimaAlimentacion,
       ultimaInteraccion: DateTime.now(),
       ultimoCuidado: DateTime.now(),
-      diasConsecutivos: diasConsecutivos,
+      diasConsecutivos: estadoActualizado.diasConsecutivos,
+      alimentacionesHoy: estadoActualizado.alimentacionesHoy,
+      juegosHoy: estadoActualizado.juegosHoy,
+      curacionesHoy: estadoActualizado.curacionesHoy + 1,
+      ultimaAccionFecha: DateTime.now(),
     );
   }
 
-  /// Descansar (recuperar energía)
+  /// Descansar (recuperar energía) - Sin límite diario
   AlebrijeEstado descansar() {
+    final estadoActualizado = _resetearSiNuevoDia();
     return AlebrijeEstado(
-      hambre: (hambre - 5).clamp(0, 100),
-      felicidad: (felicidad + 10).clamp(0, 100),
-      salud: (salud + 5).clamp(0, 100),
+      hambre: (estadoActualizado.hambre - 5).clamp(0, 100),
+      felicidad: (estadoActualizado.felicidad + 10).clamp(0, 100),
+      salud: (estadoActualizado.salud + 5).clamp(0, 100),
       energia: 100,
-      ultimaAlimentacion: ultimaAlimentacion,
+      ultimaAlimentacion: estadoActualizado.ultimaAlimentacion,
       ultimaInteraccion: DateTime.now(),
-      ultimoCuidado: ultimoCuidado,
-      diasConsecutivos: diasConsecutivos,
+      ultimoCuidado: estadoActualizado.ultimoCuidado,
+      diasConsecutivos: estadoActualizado.diasConsecutivos,
+      alimentacionesHoy: estadoActualizado.alimentacionesHoy,
+      juegosHoy: estadoActualizado.juegosHoy,
+      curacionesHoy: estadoActualizado.curacionesHoy,
+      ultimaAccionFecha: DateTime.now(),
     );
   }
 }

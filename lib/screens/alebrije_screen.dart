@@ -336,18 +336,25 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
               }
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.download, color: Colors.white),
-            tooltip: 'Descargar imagen',
-            onPressed: () {
-              print('📥 Botón de descarga presionado');
-              _descargarImagenAlebrije(context, alebrije);
-            },
+          Builder(
+            builder: (ctx) => IconButton(
+              icon: const Icon(Icons.download, color: Colors.white),
+              tooltip: 'Descargar imagen',
+              onPressed: () {
+                print('📥 Botón de descarga presionado');
+                _descargarImagenAlebrije(ctx, alebrije);
+              },
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.edit, color: Colors.white),
             tooltip: 'Renombrar',
             onPressed: () => _mostrarDialogoRenombrar(context, alebrije),
+          ),
+          IconButton(
+            icon: const Icon(Icons.local_hospital, color: Colors.white),
+            tooltip: 'Atención Médica',
+            onPressed: () => _mostrarDialogoCodigoSanacion(context),
           ),
           IconButton(
             icon: const Icon(Icons.history, color: Colors.white),
@@ -1133,10 +1140,45 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
   }
 
   Widget _buildBotonesInteraccion(AlebrijeProvider provider) {
+    final alebrije = provider.alebrije;
+    if (alebrije == null) return const SizedBox();
+    
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
+          // 🚨 INDICADOR DE LÍMITES DIARIOS
+          if (alebrije.estado.alimentacionesHoy >= 4 || alebrije.estado.juegosHoy >= 6 || alebrije.estado.curacionesHoy >= 2)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.shade300, width: 2),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '⚠️ CERCA DEL LÍMITE DIARIO',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                        Text(
+                          'Alimentar: ${alebrije.estado.alimentacionesHoy}/5 • Jugar: ${alebrije.estado.juegosHoy}/8 • Curar: ${alebrije.estado.curacionesHoy}/3',
+                          style: const TextStyle(fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Row(
             children: [
               Expanded(
@@ -1144,7 +1186,20 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                   icon: Icons.restaurant,
                   label: 'Alimentar',
                   color: Colors.orange,
+                  contador: '${alebrije.estado.alimentacionesHoy}/5',
                   onTap: () {
+                    if (alebrije.estado.alimentacionesHoy >= 5) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('🤢 ¡SOBREALIMENTADO! Ya comió suficiente hoy. Exceso causa enfermedad.'),
+                          backgroundColor: Colors.red,
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                      _mostrarMensajeAlebrije('¡Ya no puedo más! 🤢');
+                      return;
+                    }
+                    
                     provider.alimentar(20);
                     final xpBase = 15;
                     final mult = provider.multiplicadorExperienciaTotal;
@@ -1162,7 +1217,20 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                   icon: Icons.sports_esports,
                   label: 'Jugar',
                   color: Colors.purple,
+                  contador: '${alebrije.estado.juegosHoy}/8',
                   onTap: () {
+                    if (alebrije.estado.juegosHoy >= 8) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('😴 ¡AGOTADO! Ya jugó demasiado hoy. Necesita descansar.'),
+                          backgroundColor: Colors.red,
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                      _mostrarMensajeAlebrije('¡Estoy agotado! 😴');
+                      return;
+                    }
+                    
                     provider.jugar();
                     final xpBase = 25;
                     final mult = provider.multiplicadorExperienciaTotal;
@@ -1184,7 +1252,20 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                   icon: Icons.medical_services,
                   label: 'Curar',
                   color: Colors.red,
+                  contador: '${alebrije.estado.curacionesHoy}/3',
                   onTap: () {
+                    if (alebrije.estado.curacionesHoy >= 3) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('💊 Demasiada medicina hoy. Ya no tiene efecto.'),
+                          backgroundColor: Colors.orange,
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                      _mostrarMensajeAlebrije('Ya no necesito más medicinas 💊');
+                      return;
+                    }
+                    
                     provider.curar(30);
                     final xpBase = 30;
                     final mult = provider.multiplicadorExperienciaTotal;
@@ -1226,6 +1307,7 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
     required String label,
     required Color color,
     required VoidCallback onTap,
+    String? contador, // 🆕 Contador opcional (ej: "3/5")
   }) {
     return TweenAnimationBuilder(
       duration: const Duration(milliseconds: 300),
@@ -1300,6 +1382,25 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                         letterSpacing: 0.5,
                       ),
                     ),
+                    // 🆕 Mostrar contador si existe
+                    if (contador != null) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          contador,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -2196,5 +2297,210 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
         ),
       );
     }
+  }
+
+  /// 🏥 Diálogo para ingresar código de sanación médica
+  void _mostrarDialogoCodigoSanacion(BuildContext context) {
+    final TextEditingController codigoController = TextEditingController();
+    bool cargando = false;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.local_hospital, color: Colors.red),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Atención Médica',
+                  style: TextStyle(fontSize: 20),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '🩺 ¿Tu alebrije está enfermo?',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '📋 Instrucciones:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        '1️⃣ Acude al consultorio médico de UAGro\n'
+                        '2️⃣ Pide atención con:\n'
+                        '   • 🩺 Médico general\n'
+                        '   • 🧠 Psicólogo\n'
+                        '   • 🥗 Nutricionista\n'
+                        '   • 💉 Enfermería\n'
+                        '3️⃣ Recibe tu código de sanación\n'
+                        '4️⃣ Ingresa el código aquí',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Código de sanación (6 caracteres):',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: codigoController,
+                  textCapitalization: TextCapitalization.characters,
+                  maxLength: 6,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 4,
+                  ),
+                  textAlign: TextAlign.center,
+                  decoration: InputDecoration(
+                    hintText: 'MED123',
+                    counterText: '',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Colors.red, width: 2),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Colors.red, width: 3),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber.shade300),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.amber, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Códigos de prueba: MED123, PSI456, NUT789, ENF321, EMG911',
+                          style: TextStyle(fontSize: 10),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (cargando)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 16),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: cargando ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton.icon(
+              onPressed: cargando
+                  ? null
+                  : () async {
+                      final codigo = codigoController.text.trim();
+                      if (codigo.isEmpty || codigo.length != 6) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('❌ Código inválido. Debe tener 6 caracteres.'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      setDialogState(() => cargando = true);
+
+                      final provider = context.read<AlebrijeProvider>();
+                      final resultado = await provider.aplicarCodigoSanacion(codigo);
+
+                      setDialogState(() => cargando = false);
+
+                      if (!dialogContext.mounted) return;
+                      Navigator.pop(dialogContext);
+
+                      if (resultado['exito']) {
+                        _mostrarMensajeAlebrije('¡Me siento mucho mejor! 💚');
+                        _ejecutarRebote();
+                        _sparkleController.forward(from: 0);
+                        
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Row(
+                              children: [
+                                Icon(Icons.check_circle, color: Colors.green),
+                                SizedBox(width: 8),
+                                Text('¡Curación Exitosa!'),
+                              ],
+                            ),
+                            content: Text(
+                              resultado['mensaje'],
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            actions: [
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  foregroundColor: Colors.white,
+                                ),
+                                child: const Text('¡Genial!'),
+                              ),
+                            ],
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(resultado['mensaje']),
+                            backgroundColor: Colors.red,
+                            duration: const Duration(seconds: 4),
+                          ),
+                        );
+                      }
+                    },
+              icon: const Icon(Icons.healing),
+              label: const Text('Aplicar Código'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
