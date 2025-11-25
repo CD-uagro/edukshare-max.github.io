@@ -76,24 +76,10 @@ class AlebrijeProvider extends ChangeNotifier {
         print('   - Nivel: ${alebrijeBackend.nivelEvolucion}');
         print('   - DNA: ${alebrijeBackend.dna.especieBase}');
         
-        // Verificar si localStorage tiene datos diferentes
-        final alebrijeJson = prefs.getString('alebrije_data');
-        if (alebrijeJson != null) {
-          try {
-            final alebrijeLocal = AlebrijeModel.fromJson(jsonDecode(alebrijeJson));
-            if (alebrijeLocal.nombre != alebrijeBackend.nombre ||
-                alebrijeLocal.dna.especieBase != alebrijeBackend.dna.especieBase) {
-              print('🔄 CONFLICTO DETECTADO: localStorage difiere de Azure');
-              print('   - Local: ${alebrijeLocal.nombre} (${alebrijeLocal.dna.especieBase})');
-              print('   - Azure: ${alebrijeBackend.nombre} (${alebrijeBackend.dna.especieBase})');
-              print('   - BORRANDO caché local obsoleto');
-              await prefs.remove('alebrije_data');
-            }
-          } catch (e) {
-            print('⚠️ localStorage corrupto, borrando: $e');
-            await prefs.remove('alebrije_data');
-          }
-        }
+        // ⚠️ BORRAR SIEMPRE localStorage para evitar conflictos
+        print('🗑️ Borrando localStorage anterior (Azure es la única fuente)');
+        await prefs.remove('alebrije_data');
+        await prefs.remove('alebrije_capsulas');
         
         _alebrije = alebrijeBackend;
         
@@ -318,6 +304,18 @@ class AlebrijeProvider extends ChangeNotifier {
     print('✨ Animación de evolución - Nivel $nivel');
   }
 
+  /// 🗑️ Limpiar localStorage completamente (forzar recarga desde Azure)
+  Future<void> limpiarCacheLocal() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('alebrije_data');
+      await prefs.remove('alebrije_capsulas');
+      print('🗑️ localStorage limpiado completamente');
+    } catch (e) {
+      print('❌ Error limpiando localStorage: $e');
+    }
+  }
+
   /// 🔄 Forzar sincronización desde Azure (para resolver conflictos entre dispositivos)
   Future<void> forzarSincronizacionDesdeAzure() async {
     try {
@@ -329,26 +327,30 @@ class AlebrijeProvider extends ChangeNotifier {
         return;
       }
       
+      // 🗑️ LIMPIAR localStorage primero
+      print('🗑️ Limpiando localStorage antes de sincronizar...');
+      await prefs.remove('alebrije_data');
+      await prefs.remove('alebrije_capsulas');
+      
       print('🔄 Forzando sincronización desde Azure Cosmos DB...');
       final alebrijeBackend = await _cargarDesdeBackend(token);
       
       if (alebrijeBackend != null) {
-        // Comparar con versión local
+        // Mostrar lo que viene de Azure
         if (_alebrije != null) {
           if (_alebrije!.nombre != alebrijeBackend.nombre ||
               _alebrije!.dna.especieBase != alebrijeBackend.dna.especieBase ||
               _alebrije!.nivelEvolucion != alebrijeBackend.nivelEvolucion) {
-            print('⚠️ CONFLICTO: Versión local difiere de Azure');
+            print('🔄 REEMPLAZANDO versión local con Azure');
             print('   Local: ${_alebrije!.nombre} Lv.${_alebrije!.nivelEvolucion}');
             print('   Azure: ${alebrijeBackend.nombre} Lv.${alebrijeBackend.nivelEvolucion}');
           }
         }
         
-        // Azure SIEMPRE gana
+        // Azure SIEMPRE gana - NO GUARDAR EN localStorage
         _alebrije = alebrijeBackend;
-        await prefs.setString('alebrije_data', jsonEncode(_alebrije!.toJson()));
-        await prefs.remove('alebrije_capsulas'); // Limpiar cápsulas locales
-        print('✅ Sincronizado desde Azure: ${_alebrije!.nombre} Lv.${_alebrije!.nivelEvolucion}');
+        print('✅ Sincronizado SOLO desde Azure: ${_alebrije!.nombre} Lv.${_alebrije!.nivelEvolucion}');
+        print('🚫 localStorage NO actualizado (Azure es la única fuente)');
         notifyListeners();
       }
     } catch (e) {
@@ -356,7 +358,7 @@ class AlebrijeProvider extends ChangeNotifier {
     }
   }
 
-  /// Guarda el estado del alebrije - AZURE PRIMERO, localStorage como caché
+  /// Guarda el estado del alebrije - SOLO EN AZURE (sin localStorage)
   Future<void> _guardarEstado() async {
     if (_alebrije == null) return;
     
@@ -364,30 +366,25 @@ class AlebrijeProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
       
-      // ⚠️ PRIORIDAD 1: SINCRONIZAR CON AZURE COSMOS DB PRIMERO
-      if (token != null) {
-        try {
-          await _sincronizarConBackend(token);
-          print('✅ Estado guardado en Azure Cosmos DB (fuente principal)');
-        } catch (e) {
-          print('❌ Error al sincronizar con Azure: $e');
-          // Si falla Azure, no guardar en localStorage para evitar desincronización
-          throw Exception('No se pudo sincronizar con servidor: $e');
-        }
-      } else {
-        print('⚠️ No hay token - no se puede guardar en Azure');
-        throw Exception('Sesión expirada');
+      if (token == null) {
+        print('❌ No hay token - sesión expirada');
+        throw Exception('Sesión expirada - requiere login');
       }
       
-      // PRIORIDAD 2: Guardar en localStorage como caché (solo si Azure tuvo éxito)
-      await prefs.setString('alebrije_data', jsonEncode(_alebrije!.toJson()));
-      await prefs.setString('alebrije_capsulas', jsonEncode(_capsulas.map((c) => c.toJson()).toList()));
-      print('💾 Caché local actualizado (${_capsulas.length} cápsulas)');
+      // 🔥 GUARDAR SOLO EN AZURE - NO EN localStorage
+      print('🔄 Guardando estado en Azure Cosmos DB...');
+      await _sincronizarConBackend(token);
+      print('✅ Estado guardado EXITOSAMENTE en Azure Cosmos DB');
+      
+      // ⚠️ NO GUARDAR EN localStorage - Azure es la única fuente
+      // Si guardamos en localStorage, puede causar conflictos
+      print('🚫 localStorage NO actualizado (Azure es la única fuente)');
       
       _ultimaActualizacion = DateTime.now();
     } catch (e) {
-      print('❌ Error al guardar estado: $e');
-      rethrow; // Propagar error para que UI sepa que falló
+      print('❌ FALLO CRÍTICO: No se pudo guardar en Azure: $e');
+      // NO guardar nada si Azure falla
+      rethrow;
     }
   }
 
@@ -458,6 +455,22 @@ class AlebrijeProvider extends ChangeNotifier {
   /// Actualiza el estado aplicando decaimiento natural
   Future<void> actualizarEstado() async {
     if (_alebrije == null) return;
+
+    // 🔄 SIEMPRE sincronizar desde Azure primero
+    print('🔄 Sincronizando desde Azure antes de actualizar estado...');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+      if (token != null) {
+        final alebrijeAzure = await _cargarDesdeBackend(token);
+        if (alebrijeAzure != null) {
+          _alebrije = alebrijeAzure;
+          print('✅ Estado sincronizado desde Azure');
+        }
+      }
+    } catch (e) {
+      print('⚠️ No se pudo sincronizar desde Azure: $e');
+    }
 
     final ahora = DateTime.now();
     final horasTranscurridas = ahora.difference(_ultimaActualizacion).inHours;
