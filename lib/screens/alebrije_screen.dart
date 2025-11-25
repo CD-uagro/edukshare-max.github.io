@@ -552,8 +552,8 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
           // Botones de interacción
           _buildBotonesInteraccion(provider),
           
-          // Minijuegos interactivos
-          _buildMinijuegos(provider),
+          // Información de decaimiento
+          _buildInfoDecaimiento(alebrije),
           
           // Estado emocional
           _buildEstadoEmocional(alebrije),
@@ -1060,15 +1060,49 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
   }
   
   String _obtenerMensajeAccion(String accion) {
+    final random = DateTime.now().millisecond % 5;
+    
     switch (accion) {
       case 'Alimentar':
-        return '¡Mmm, delicioso! 😋';
+        final mensajes = [
+          '¡Mmm, delicioso! 😋',
+          '¡Qué rico! 🤤',
+          '¡Estaba hambriento! 🍽️',
+          '¡Gracias por la comida! 💕',
+          '¡Ahora tengo energía! ⚡',
+        ];
+        return mensajes[random];
+        
       case 'Jugar':
-        return '¡Esto es divertido! 🎉';
+        final mensajes = [
+          '¡Esto es divertido! 🎉',
+          '¡Me encanta jugar! 🎮',
+          '¡Otra vez, otra vez! 🤗',
+          '¡Eres el mejor! ⭐',
+          '¡Jajaja! 😆',
+        ];
+        return mensajes[random];
+        
       case 'Curar':
-        return 'Me siento mejor 💊';
+        final mensajes = [
+          'Me siento mejor 💊',
+          '¡Gracias, doctor! 🏥',
+          'Ya no me duele 😌',
+          '¡Qué alivio! 💚',
+          'Ahora estoy sano 🩺',
+        ];
+        return mensajes[random];
+        
       case 'Descansar':
-        return 'Zzz... 😴';
+        final mensajes = [
+          'Zzz... 😴',
+          '¡Qué sueño! 🛌',
+          'Necesitaba esto 💤',
+          '¡Dulces sueños! 🌙',
+          'Recargan do energías... ⚡',
+        ];
+        return mensajes[random];
+        
       default:
         return '¡Gracias! ❤️';
     }
@@ -1148,13 +1182,26 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
     );
   }
   
-  Widget _buildMinijuegos(AlebrijeProvider provider) {
+  Widget _buildInfoDecaimiento(alebrije) {
+    final now = DateTime.now();
+    final horasSinAlimentar = now.difference(alebrije.estado.ultimaAlimentacion).inHours;
+    final horasSinInteractuar = now.difference(alebrije.estado.ultimaInteraccion).inHours;
+    final horasSinCuidar = now.difference(alebrije.estado.ultimoCuidado).inHours;
+    
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF8B1538).withOpacity(0.1),
+            Colors.white,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF8B1538).withOpacity(0.2)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -1168,10 +1215,10 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
         children: [
           const Row(
             children: [
-              Icon(Icons.games, color: Color(0xFF8B1538)),
+              Icon(Icons.schedule, color: Color(0xFF8B1538)),
               SizedBox(width: 8),
               Text(
-                'Minijuegos Interactivos',
+                '⏰ Sistema de Cuidado Automático',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1182,357 +1229,155 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
           ),
           const SizedBox(height: 16),
           
-          // Carrera de colores - desliza rápido
-          _buildMinijuego(
-            titulo: '🎨 Carrera de Colores',
-            descripcion: '¡Toca 10 veces rápido!',
-            icono: Icons.palette,
-            color: Colors.purple,
-            onJugar: () => _jugarCarreraColores(provider),
+          // Info de decaimiento
+          _buildInfoItem(
+            icono: Icons.restaurant,
+            titulo: 'Hambre',
+            descripcion: 'Baja -5 cada 6 horas sin alimentar',
+            tiempoTranscurrido: horasSinAlimentar,
+            colorIcono: Colors.orange,
           ),
           
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           
-          // Encuentra al alebrije - memoriza patrón
-          _buildMinijuego(
-            titulo: '🔍 Encuentra el Patrón',
-            descripcion: 'Memoriza y repite',
-            icono: Icons.visibility,
-            color: Colors.blue,
-            onJugar: () => _jugarEncontrarPatron(provider),
+          _buildInfoItem(
+            icono: Icons.favorite,
+            titulo: 'Felicidad',
+            descripcion: 'Baja -5 cada 8 horas sin jugar',
+            tiempoTranscurrido: horasSinInteractuar,
+            colorIcono: Colors.pink,
           ),
           
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           
-          // Alimentación rápida
-          _buildMinijuego(
-            titulo: '⚡ Reacción Rápida',
-            descripcion: 'Toca cuando brille',
-            icono: Icons.flash_on,
-            color: Colors.orange,
-            onJugar: () => _jugarReaccionRapida(provider),
+          _buildInfoItem(
+            icono: Icons.medical_services,
+            titulo: 'Salud',
+            descripcion: 'Baja -3 cada 12 horas sin cuidar',
+            tiempoTranscurrido: horasSinCuidar,
+            colorIcono: Colors.red,
+          ),
+          
+          const SizedBox(height: 12),
+          
+          _buildInfoItem(
+            icono: Icons.battery_charging_full,
+            titulo: 'Energía',
+            descripcion: 'Baja -5 cada 4 horas sin descansar',
+            tiempoTranscurrido: horasSinInteractuar,
+            colorIcono: Colors.blue,
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Consejos
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.amber.shade200),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.lightbulb, color: Colors.orange, size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '💡 Consejos de Cuidado',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '• Visítalo diariamente para mantener su felicidad alta\n• Tócalo frecuentemente para interactuar\n• Las consultas médicas lo alimentan automáticamente\n• Las vacunas mejoran su salud\n• Mantén todos los valores arriba de 30',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[700],
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
   
-  Widget _buildMinijuego({
+  Widget _buildInfoItem({
+    required IconData icono,
     required String titulo,
     required String descripcion,
-    required IconData icono,
-    required Color color,
-    required VoidCallback onJugar,
+    required int tiempoTranscurrido,
+    required Color colorIcono,
   }) {
-    return InkWell(
-      onTap: onJugar,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
-          ),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icono, color: Colors.white, size: 24),
+    final urgente = tiempoTranscurrido >= 6;
+    
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: urgente ? colorIcono.withOpacity(0.2) : colorIcono.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: urgente ? colorIcono : colorIcono.withOpacity(0.3),
+              width: urgente ? 2 : 1,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          ),
+          child: Icon(icono, color: colorIcono, size: 24),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
                   Text(
                     titulo,
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: color,
+                      color: urgente ? colorIcono : Colors.grey[800],
                     ),
                   ),
-                  Text(
-                    descripcion,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
+                  if (urgente) ...[
+                    const SizedBox(width: 4),
+                    const Icon(Icons.warning, size: 16, color: Colors.orange),
+                  ],
                 ],
               ),
-            ),
-            Icon(Icons.play_arrow, color: color),
-          ],
-        ),
-      ),
-    );
-  }
-  
-  // Minijuego 1: Carrera de Colores
-  void _jugarCarreraColores(AlebrijeProvider provider) {
-    int toques = 0;
-    final inicio = DateTime.now();
-    
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('🎨 ¡Carrera de Colores!'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Toques: $toques/10',
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 20),
-                  GestureDetector(
-                    onTap: () {
-                      setDialogState(() {
-                        toques++;
-                        _ejecutarRebote();
-                      });
-                      
-                      if (toques >= 10) {
-                        final duracion = DateTime.now().difference(inicio);
-                        Navigator.pop(context);
-                        
-                        final puntos = duracion.inSeconds < 3 ? 50 : (duracion.inSeconds < 5 ? 30 : 15);
-                        provider.agregarExperiencia(puntos, 'Ganaste Carrera de Colores');
-                        _mostrarMensajeAlebrije('¡Increíble velocidad! +$puntos XP 🏆');
-                        _sparkleController.forward(from: 0);
-                      }
-                    },
-                    child: Container(
-                      width: 150,
-                      height: 150,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.purple,
-                            Colors.pink,
-                            Colors.orange,
-                          ],
-                        ),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.purple.withOpacity(0.5),
-                            blurRadius: 20,
-                            spreadRadius: 5,
-                          ),
-                        ],
-                      ),
-                      child: const Center(
-                        child: Text(
-                          '¡TOCA!',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-  
-  // Minijuego 2: Encontrar Patrón
-  void _jugarEncontrarPatron(AlebrijeProvider provider) {
-    final patron = List.generate(4, (_) => DateTime.now().millisecond % 4);
-    int paso = 0;
-    bool mostrandoPatron = true;
-    
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            if (mostrandoPatron) {
-              // Mostrar patrón automáticamente
-              Future.delayed(const Duration(milliseconds: 500), () {
-                if (paso < patron.length && mounted) {
-                  setDialogState(() => paso++);
-                  _ejecutarSacudida();
-                } else if (paso >= patron.length) {
-                  Future.delayed(const Duration(milliseconds: 500), () {
-                    if (mounted) {
-                      setDialogState(() {
-                        mostrandoPatron = false;
-                        paso = 0;
-                      });
-                    }
-                  });
-                }
-              });
-            }
-            
-            return AlertDialog(
-              title: Text(mostrandoPatron ? '👀 Memoriza' : '🔍 Repite'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GridView.count(
-                    shrinkWrap: true,
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 10,
-                    children: List.generate(4, (index) {
-                      final colores = [Colors.red, Colors.blue, Colors.green, Colors.yellow];
-                      final activo = mostrandoPatron && paso > 0 && patron[paso - 1] == index;
-                      
-                      return GestureDetector(
-                        onTap: mostrandoPatron
-                            ? null
-                            : () {
-                                if (patron[paso] == index) {
-                                  setDialogState(() => paso++);
-                                  _ejecutarRebote();
-                                  
-                                  if (paso >= patron.length) {
-                                    Navigator.pop(context);
-                                    provider.agregarExperiencia(40, 'Patrón completado');
-                                    _mostrarMensajeAlebrije('¡Memoria perfecta! +40 XP 🧠');
-                                    _sparkleController.forward(from: 0);
-                                  }
-                                } else {
-                                  Navigator.pop(context);
-                                  _mostrarMensajeAlebrije('Casi... ¡Inténtalo de nuevo! 💪');
-                                }
-                              },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: activo ? colores[index] : colores[index].withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: activo ? Colors.white : colores[index],
-                              width: 3,
-                            ),
-                            boxShadow: activo
-                                ? [
-                                    BoxShadow(
-                                      color: colores[index].withOpacity(0.5),
-                                      blurRadius: 20,
-                                      spreadRadius: 5,
-                                    ),
-                                  ]
-                                : [],
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-  
-  // Minijuego 3: Reacción Rápida
-  void _jugarReaccionRapida(AlebrijeProvider provider) {
-    bool brillando = false;
-    DateTime? momentoBrillo;
-    
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        // Esperar tiempo aleatorio y luego brillar
-        Future.delayed(Duration(milliseconds: 1000 + (DateTime.now().millisecond % 3000)), () {
-          if (mounted) {
-            momentoBrillo = DateTime.now();
-            setState(() => brillando = true);
-          }
-        });
-        
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('⚡ ¡Reacción Rápida!'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    brillando ? '¡TOCA AHORA!' : 'Espera a que brille...',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(height: 20),
-                  GestureDetector(
-                    onTap: () {
-                      if (brillando && momentoBrillo != null) {
-                        final reaccion = DateTime.now().difference(momentoBrillo!);
-                        Navigator.pop(context);
-                        
-                        final puntos = reaccion.inMilliseconds < 300
-                            ? 60
-                            : (reaccion.inMilliseconds < 500 ? 40 : 25);
-                        
-                        provider.agregarExperiencia(puntos, 'Reacción rápida');
-                        _mostrarMensajeAlebrije(
-                          '¡${reaccion.inMilliseconds}ms! Increíble +$puntos XP ⚡',
-                        );
-                        _sparkleController.forward(from: 0);
-                      }
-                    },
-                    child: Container(
-                      width: 150,
-                      height: 150,
-                      decoration: BoxDecoration(
-                        color: brillando ? Colors.yellow : Colors.grey[300],
-                        shape: BoxShape.circle,
-                        boxShadow: brillando
-                            ? [
-                                BoxShadow(
-                                  color: Colors.yellow.withOpacity(0.8),
-                                  blurRadius: 30,
-                                  spreadRadius: 10,
-                                ),
-                              ]
-                            : [],
-                      ),
-                      child: Center(
-                        child: Icon(
-                          Icons.flash_on,
-                          size: 60,
-                          color: brillando ? Colors.orange : Colors.grey[500],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancelar'),
+              Text(
+                descripcion,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey[600],
                 ),
-              ],
-            );
-          },
-        );
-      },
+              ),
+              Text(
+                'Hace ${tiempoTranscurrido}h',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: urgente ? colorIcono : Colors.grey[500],
+                  fontWeight: urgente ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
