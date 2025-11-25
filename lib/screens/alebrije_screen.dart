@@ -58,9 +58,19 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
       duration: const Duration(milliseconds: 1500),
     );
 
-    // Actualizar estado al entrar
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AlebrijeProvider>().actualizarEstado();
+    // Intentar cargar alebrije existente primero
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final alebrijeProvider = context.read<AlebrijeProvider>();
+      final sessionProvider = context.read<SessionProvider>();
+      final matricula = sessionProvider.carnet?.matricula ?? '15662';
+      
+      // Solo inicializar si no hay alebrije cargado
+      if (alebrijeProvider.alebrije == null) {
+        await alebrijeProvider.inicializarAlebrije(matricula);
+      } else {
+        await alebrijeProvider.actualizarEstado();
+      }
+      
       _evaluarEstadoEmocional();
       _iniciarAnimacionesAutomaticas();
     });

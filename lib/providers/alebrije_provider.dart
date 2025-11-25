@@ -47,50 +47,74 @@ class AlebrijeProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final alebrijeJson = prefs.getString('alebrije_data');
       
-      if (alebrijeJson != null && _alebrije == null) {
+      if (alebrijeJson != null) {
+        // SIEMPRE usar el alebrije guardado si existe
         _alebrije = AlebrijeModel.fromJson(jsonDecode(alebrijeJson));
-        print('✅ Alebrije cargado desde localStorage: ${_alebrije!.nombre}');
-      }
-      
-      // Cargar cápsulas guardadas
-      final capsulasJson = prefs.getString('alebrije_capsulas');
-      if (capsulasJson != null) {
-        final List<dynamic> capsulasList = jsonDecode(capsulasJson);
-        _capsulas = capsulasList.map((json) => CapsulaPoder.fromJson(json)).toList();
+        print('✅ Alebrije existente cargado desde localStorage: ${_alebrije!.nombre} (${_alebrije!.dna.especieBase})');
         
-        // Limpiar cápsulas expiradas
-        _capsulas.removeWhere((c) => !c.estaActiva && c.duracion != null);
-        print('💊 ${capsulasActivas.length} cápsulas activas cargadas');
-      }
-      
-      // Intentar cargar desde backend (respaldo)
-      if (_alebrije == null) {
-        try {
-          final token = prefs.getString('auth_token');
-          if (token != null) {
-            final alebrijeBackend = await _cargarDesdeBackend(token);
-            if (alebrijeBackend != null) {
-              _alebrije = alebrijeBackend;
-              print('✅ Alebrije recuperado desde backend');
-            }
-          }
-        } catch (e) {
-          print('⚠️ No se pudo cargar desde backend (normal si es primera vez): $e');
+        // Cargar cápsulas guardadas
+        final capsulasJson = prefs.getString('alebrije_capsulas');
+        if (capsulasJson != null) {
+          final List<dynamic> capsulasList = jsonDecode(capsulasJson);
+          _capsulas = capsulasList.map((json) => CapsulaPoder.fromJson(json)).toList();
+          
+          // Limpiar cápsulas expiradas
+          _capsulas.removeWhere((c) => !c.estaActiva && c.duracion != null);
+          print('💊 ${capsulasActivas.length} cápsulas activas cargadas');
         }
-      }
-      
-      if (_alebrije == null) {
-        // Generar nuevo alebrije
-        final especies = ['jaguar', 'aguila', 'serpiente', 'venado', 'colibri'];
-        final especieSeleccionada = especieBase ?? especies[Random().nextInt(especies.length)];
         
-        _alebrije = AlebrijeModel.generar(
-          matricula: matricula,
-          especieBase: especieSeleccionada,
+        // Aplicar decaimiento y terminar
+        _alebrije = _alebrije!.copyWith(
+          estado: _alebrije!.estado.aplicarDecaimiento(),
+          updatedAt: DateTime.now(),
         );
         
-        print('🎨 Alebrije generado: ${_alebrije!.nombre} (${_alebrije!.dna.especieBase})');
+        _ultimaActualizacion = DateTime.now();
+        _isLoading = false;
+        notifyListeners();
+        _verificarNecesidadesYNotificar();
+        return; // IMPORTANTE: Salir aquí, no regenerar
       }
+      
+      // Solo si NO existe alebrije guardado, intentar backend
+      try {
+        final token = prefs.getString('auth_token');
+        if (token != null) {
+          final alebrijeBackend = await _cargarDesdeBackend(token);
+          if (alebrijeBackend != null) {
+            _alebrije = alebrijeBackend;
+            print('✅ Alebrije recuperado desde backend');
+            
+            // Aplicar decaimiento y terminar
+            _alebrije = _alebrije!.copyWith(
+              estado: _alebrije!.estado.aplicarDecaimiento(),
+              updatedAt: DateTime.now(),
+            );
+            
+            _ultimaActualizacion = DateTime.now();
+            _isLoading = false;
+            notifyListeners();
+            _verificarNecesidadesYNotificar();
+            return;
+          }
+        }
+      } catch (e) {
+        print('⚠️ No se pudo cargar desde backend (normal si es primera vez): $e');
+      }
+      
+      // Solo generar nuevo alebrije si NO existe ninguno guardado
+      final especies = ['jaguar', 'aguila', 'serpiente', 'venado', 'colibri'];
+      final especieSeleccionada = especieBase ?? especies[Random().nextInt(especies.length)];
+      
+      _alebrije = AlebrijeModel.generar(
+        matricula: matricula,
+        especieBase: especieSeleccionada,
+      );
+      
+      print('🎨 Nuevo alebrije generado: ${_alebrije!.nombre} (${_alebrije!.dna.especieBase})');
+      
+      // Guardar inmediatamente el nuevo alebrije
+      await _guardarEstado();
 
       // Aplicar decaimiento desde última actualización
       _alebrije = _alebrije!.copyWith(
