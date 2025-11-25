@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/alebrije_model.dart';
 import '../models/capsula_poder_model.dart';
-import '../models/codigo_sanacion_model.dart';
 import '../providers/session_provider.dart';
 import '../services/api_service.dart';
 import 'dart:math';
@@ -19,9 +18,6 @@ class AlebrijeProvider extends ChangeNotifier {
   // 💊 Sistema de cápsulas
   List<CapsulaPoder> _capsulas = [];
   List<CapsulaPoder> _capsulasPendientes = []; // Cápsulas no aplicadas aún
-  
-  // 🏥 Sistema de códigos de sanación
-  List<CodigoSanacion> _codigosUsados = []; // Historial de códigos aplicados
 
   AlebrijeModel? get alebrije => _alebrije;
   bool get isLoading => _isLoading;
@@ -98,9 +94,6 @@ class AlebrijeProvider extends ChangeNotifier {
           _capsulas.removeWhere((c) => !c.estaActiva && c.duracion != null);
           print('💊 ${capsulasActivas.length} cápsulas activas cargadas');
         }
-        
-        // 🏥 Cargar historial de códigos de sanación
-        await _cargarHistorialCodigos();
         
         // Aplicar decaimiento y terminar
         _alebrije = _alebrije!.copyWith(
@@ -797,192 +790,5 @@ extension AlebrijeProviderCapsulas on AlebrijeProvider {
       'salud': (estado.salud + bonosSaludTotal).clamp(0, 100),
       'energia': (estado.energia + bonosEnergiaTotal).clamp(0, 100),
     };
-  }
-
-  // ========================================
-  // 🏥 SISTEMA DE CÓDIGOS DE SANACIÓN
-  // ========================================
-
-  /// Aplica un código de sanación proporcionado por personal médico
-  Future<Map<String, dynamic>> aplicarCodigoSanacion(String codigoIngresado) async {
-    if (_alebrije == null) {
-      return {
-        'exito': false,
-        'mensaje': 'No hay alebrije para curar',
-      };
-    }
-
-    // Validar formato del código (6 caracteres alfanuméricos)
-    if (codigoIngresado.length != 6) {
-      return {
-        'exito': false,
-        'mensaje': '❌ Código inválido. Debe tener 6 caracteres.',
-      };
-    }
-
-    // Verificar si el código ya fue usado
-    if (_codigosUsados.any((c) => c.codigo == codigoIngresado.toUpperCase())) {
-      return {
-        'exito': false,
-        'mensaje': '🚫 Este código ya fue utilizado anteriormente.',
-      };
-    }
-
-    // 🔑 VALIDAR CÓDIGO CONTRA BACKEND
-    // Por ahora, simularemos validación local
-    // TODO: Implementar validación en backend contra base de datos de códigos
-    
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
-      
-      if (token == null) {
-        return {
-          'exito': false,
-          'mensaje': '❌ Sesión expirada',
-        };
-      }
-
-      // TODO: Llamar a backend para validar código
-      // final codigoValido = await ApiService.validarCodigoSanacion(token, codigoIngresado);
-      
-      // SIMULACIÓN: Crear código de ejemplo para pruebas
-      final codigo = _simularValidacionCodigo(codigoIngresado);
-      
-      if (codigo == null) {
-        return {
-          'exito': false,
-          'mensaje': '❌ Código no válido o expirado. Consulta con el personal médico.',
-        };
-      }
-
-      // Aplicar efectos curativos
-      print('🏥 Aplicando código de sanación: ${codigo.nombreTipo}');
-      print('   Especialista: ${codigo.especialista}');
-      print('   Restauración: Salud +${codigo.restauracionSalud}, Felicidad +${codigo.restauracionFelicidad}');
-
-      final estadoActual = _alebrije!.estado;
-      final estadoCurado = AlebrijeEstado(
-        hambre: (estadoActual.hambre + codigo.restauracionHambre).clamp(0, 100),
-        felicidad: (estadoActual.felicidad + codigo.restauracionFelicidad).clamp(0, 100),
-        salud: (estadoActual.salud + codigo.restauracionSalud).clamp(0, 100),
-        energia: (estadoActual.energia + codigo.restauracionEnergia).clamp(0, 100),
-        ultimaAlimentacion: estadoActual.ultimaAlimentacion,
-        ultimaInteraccion: DateTime.now(),
-        ultimoCuidado: DateTime.now(), // ✅ Marca como curado
-        diasConsecutivos: estadoActual.diasConsecutivos,
-        // 🩺 RESETEAR CONTADORES si es emergencia (cura enfermedad por exceso)
-        alimentacionesHoy: codigo.tipo == TipoCodigoSanacion.emergencia ? 0 : estadoActual.alimentacionesHoy,
-        juegosHoy: codigo.tipo == TipoCodigoSanacion.emergencia ? 0 : estadoActual.juegosHoy,
-        curacionesHoy: estadoActual.curacionesHoy,
-        ultimaAccionFecha: estadoActual.ultimaAccionFecha,
-      );
-
-      _alebrije = _alebrije!.copyWith(
-        estado: estadoCurado,
-        updatedAt: DateTime.now(),
-      );
-
-      // Marcar código como usado y guardar en historial
-      final codigoUsado = codigo.copyWith(usado: true);
-      _codigosUsados.add(codigoUsado);
-      
-      // Guardar historial de códigos
-      await prefs.setString('codigos_sanacion_usados', 
-        jsonEncode(_codigosUsados.map((c) => c.toJson()).toList())
-      );
-
-      await _guardarEstado();
-      notifyListeners();
-
-      return {
-        'exito': true,
-        'mensaje': '✅ ${codigo.emoji} ${codigo.nombreTipo}\n'
-                  '🩺 Atendido por: ${codigo.especialista}\n'
-                  '💚 Salud restaurada: +${codigo.restauracionSalud}\n'
-                  '😊 Felicidad: +${codigo.restauracionFelicidad}\n'
-                  '${codigo.tipo == TipoCodigoSanacion.emergencia ? "⚡ ¡Contadores reseteados!" : ""}',
-        'codigo': codigo,
-      };
-    } catch (e) {
-      print('❌ Error aplicando código: $e');
-      return {
-        'exito': false,
-        'mensaje': '❌ Error al aplicar el código. Inténtalo nuevamente.',
-      };
-    }
-  }
-
-  /// SIMULACIÓN: Valida código localmente (será reemplazado por backend)
-  CodigoSanacion? _simularValidacionCodigo(String codigo) {
-    final codigoUpper = codigo.toUpperCase();
-    
-    // 🔑 CÓDIGOS DE PRUEBA (en producción vendrían del backend)
-    final codigosPrueba = {
-      'MED123': CodigoSanacion.generar(
-        tipo: TipoCodigoSanacion.consulta,
-        especialista: 'Dra. María García',
-        validezHoras: const Duration(hours: 24),
-      ),
-      'PSI456': CodigoSanacion.generar(
-        tipo: TipoCodigoSanacion.psicologia,
-        especialista: 'Psic. Juan Pérez',
-        validezHoras: const Duration(hours: 48),
-      ),
-      'NUT789': CodigoSanacion.generar(
-        tipo: TipoCodigoSanacion.nutricion,
-        especialista: 'Lic. Ana López',
-        validezHoras: const Duration(hours: 24),
-      ),
-      'ENF321': CodigoSanacion.generar(
-        tipo: TipoCodigoSanacion.enfermeria,
-        especialista: 'Enf. Carlos Ruiz',
-        validezHoras: const Duration(hours: 12),
-      ),
-      'EMG911': CodigoSanacion.generar(
-        tipo: TipoCodigoSanacion.emergencia,
-        especialista: 'Dr. Emergency',
-        validezHoras: const Duration(hours: 6),
-      ),
-    };
-
-    // Sobrescribir código generado con el ingresado
-    if (codigosPrueba.containsKey(codigoUpper)) {
-      final codigoBase = codigosPrueba[codigoUpper]!;
-      return CodigoSanacion(
-        codigo: codigoUpper,
-        tipo: codigoBase.tipo,
-        especialista: codigoBase.especialista,
-        generadoEn: codigoBase.generadoEn,
-        expiraEn: codigoBase.expiraEn,
-        usado: false,
-        restauracionSalud: codigoBase.restauracionSalud,
-        restauracionFelicidad: codigoBase.restauracionFelicidad,
-        restauracionHambre: codigoBase.restauracionHambre,
-        restauracionEnergia: codigoBase.restauracionEnergia,
-        curaEnfermedad: codigoBase.curaEnfermedad,
-      );
-    }
-
-    return null; // Código no válido
-  }
-
-  /// Obtiene el historial de códigos usados
-  List<CodigoSanacion> get codigosUsados => _codigosUsados;
-
-  /// Carga historial de códigos al inicializar
-  Future<void> _cargarHistorialCodigos() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final codigosJson = prefs.getString('codigos_sanacion_usados');
-      
-      if (codigosJson != null) {
-        final List<dynamic> lista = jsonDecode(codigosJson);
-        _codigosUsados = lista.map((json) => CodigoSanacion.fromJson(json)).toList();
-        print('📋 ${_codigosUsados.length} códigos de sanación en historial');
-      }
-    } catch (e) {
-      print('⚠️ Error cargando historial de códigos: $e');
-    }
   }
 }
