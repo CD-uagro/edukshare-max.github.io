@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../models/alebrije_model.dart';
 import '../providers/session_provider.dart';
 import 'dart:math';
@@ -22,8 +24,17 @@ class AlebrijeProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // TODO: Intentar cargar desde backend primero
-      // Si no existe, generar uno nuevo
+      // Intentar cargar desde localStorage primero
+      final prefs = await SharedPreferences.getInstance();
+      final alebrijeJson = prefs.getString('alebrije_data');
+      
+      if (alebrijeJson != null && _alebrije == null) {
+        _alebrije = AlebrijeModel.fromJson(jsonDecode(alebrijeJson));
+        print('✅ Alebrije cargado desde localStorage: ${_alebrije!.nombre}');
+      }
+      
+      // TODO: Intentar cargar desde backend
+      // final alebrijeBackend = await ApiService.getAlebrije();
       
       if (_alebrije == null) {
         // Generar nuevo alebrije
@@ -180,8 +191,14 @@ class AlebrijeProvider extends ChangeNotifier {
     if (_alebrije == null) return;
     
     try {
-      // TODO: Implementar guardado en Cosmos DB
-      print('💾 Guardando estado del alebrije: ${_alebrije!.id}');
+      // Guardar en localStorage primero (no requiere backend)
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('alebrije_data', jsonEncode(_alebrije!.toJson()));
+      print('💾 Guardando estado del alebrije en localStorage: ${_alebrije!.id}');
+      
+      // TODO: Sincronizar con backend cuando esté disponible
+      // await ApiService.updateAlebrije(_alebrije!.toJson());
+      
       _ultimaActualizacion = DateTime.now();
     } catch (e) {
       print('❌ Error al guardar estado: $e');
@@ -245,7 +262,7 @@ class AlebrijeProvider extends ChangeNotifier {
     return '🌌 Leyenda Viviente';
   }
 
-  /// Calcula el progreso hacia el siguiente nivel (0.0 - 1.0)
+  /// Obtiene el progreso hacia el siguiente nivel (0.0 - 1.0)
   double getProgresoNivel() {
     if (_alebrije == null) return 0.0;
     final necesarios = _calcularPuntosNecesarios(_alebrije!.nivelEvolucion);
@@ -255,6 +272,36 @@ class AlebrijeProvider extends ChangeNotifier {
   /// Exponer método de cálculo de puntos (para uso en UI)
   int calcularPuntosNecesarios(int nivel) {
     return _calcularPuntosNecesarios(nivel);
+  }
+
+  /// Cambiar de alebrije (solo si alcanzó nivel máximo o está en bajo nivel)
+  Future<bool> puedeCambiarAlebrije() async {
+    if (_alebrije == null) return true;
+    // Permitir cambio si está en nivel 1-3 (recién empezado) o nivel 16+ (completado)
+    return _alebrije!.nivelEvolucion <= 3 || _alebrije!.nivelEvolucion >= 16;
+  }
+
+  /// Guardar alebrije actual en colección y crear uno nuevo
+  Future<void> cambiarAlebrije(String matricula, String nuevaEspecie) async {
+    if (_alebrije != null) {
+      // Guardar alebrije actual en colección
+      final prefs = await SharedPreferences.getInstance();
+      final coleccion = prefs.getStringList('coleccion_alebrijes') ?? [];
+      coleccion.add(jsonEncode(_alebrije!.toJson()));
+      await prefs.setStringList('coleccion_alebrijes', coleccion);
+      print('📚 Alebrije guardado en colección: ${_alebrije!.nombre}');
+    }
+
+    // Crear nuevo alebrije
+    _alebrije = null;
+    await inicializarAlebrije(matricula, especieBase: nuevaEspecie);
+  }
+
+  /// Obtener colección de alebrijes anteriores
+  Future<List<AlebrijeModel>> getColeccion() async {
+    final prefs = await SharedPreferences.getInstance();
+    final coleccion = prefs.getStringList('coleccion_alebrijes') ?? [];
+    return coleccion.map((json) => AlebrijeModel.fromJson(jsonDecode(json))).toList();
   }
 }
 

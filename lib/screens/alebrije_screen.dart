@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:convert';
 import '../providers/alebrije_provider.dart';
+import '../providers/session_provider.dart';
 import '../services/alebrije_generator.dart';
 
 /// Pantalla principal de interacción con el Alebrije Tamagotchi
@@ -90,11 +91,46 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with SingleTickerProvid
 
   Widget _buildSeleccionEspecie(BuildContext context) {
     final especies = [
-      {'nombre': 'Jaguar', 'especie': 'jaguar', 'emoji': '🐆', 'descripcion': 'Fuerza y valentía'},
-      {'nombre': 'Águila', 'especie': 'aguila', 'emoji': '🦅', 'descripcion': 'Visión y libertad'},
-      {'nombre': 'Serpiente', 'especie': 'serpiente', 'emoji': '🐍', 'descripcion': 'Sabiduría y renovación'},
-      {'nombre': 'Venado', 'especie': 'venado', 'emoji': '🦌', 'descripcion': 'Gracia y conexión'},
-      {'nombre': 'Colibrí', 'especie': 'colibri', 'emoji': '🐦', 'descripcion': 'Alegría y energía'},
+      {
+        'nombre': 'Jaguar',
+        'especie': 'jaguar',
+        'emoji': '🐆',
+        'descripcion': 'Fuerza y valentía',
+        'detalles': 'Símbolo de poder y protección. Tu alebrije tendrá forma felina, garras poderosas y presencia imponente. Ideal para quien busca fortaleza.',
+        'caracteristicas': '• Cuerpo robusto\n• Garras poderosas\n• Evoluciones majestuosas'
+      },
+      {
+        'nombre': 'Águila',
+        'especie': 'aguila',
+        'emoji': '🦅',
+        'descripcion': 'Visión y libertad',
+        'detalles': 'Guardián del cielo. Tu alebrije tendrá alas majestuosas, visión aguda y forma aviar elegante. Perfecto para espíritus libres.',
+        'caracteristicas': '• Alas grandes\n• Forma aviar\n• Evoluciones aéreas'
+      },
+      {
+        'nombre': 'Serpiente',
+        'especie': 'serpiente',
+        'emoji': '🐍',
+        'descripcion': 'Sabiduría y renovación',
+        'detalles': 'Símbolo de transformación continua. Tu alebrije será alargado, con escamas místicas y evoluciones únicas. Para mentes estratégicas.',
+        'caracteristicas': '• Cuerpo alargado\n• Escamas brillantes\n• Transformaciones únicas'
+      },
+      {
+        'nombre': 'Venado',
+        'especie': 'venado',
+        'emoji': '🦌',
+        'descripcion': 'Gracia y conexión',
+        'detalles': 'Guardián de la naturaleza. Tu alebrije tendrá cuernos ramificados, movimientos elegantes y conexión espiritual. Ideal para almas sensibles.',
+        'caracteristicas': '• Cuernos ramificados\n• Forma elegante\n• Evoluciones naturales'
+      },
+      {
+        'nombre': 'Colibrí',
+        'especie': 'colibri',
+        'emoji': '🐦',
+        'descripcion': 'Alegría y energía',
+        'detalles': 'Mensajero de la felicidad. Tu alebrije será pequeño, veloz, con colores vibrantes y energía infinita. Para espíritus alegres.',
+        'caracteristicas': '• Tamaño compacto\n• Colores vibrantes\n• Evoluciones veloces'
+      },
     ];
 
     return Scaffold(
@@ -123,6 +159,36 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with SingleTickerProvid
                 ),
                 textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white30),
+                ),
+                child: const Column(
+                  children: [
+                    Text(
+                      'ℹ️ Importante',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      '• Cada especie evoluciona de forma única\n• Tu alebrije será generado algorítmicamente (único)\n• Puedes cambiarlo si llegas a nivel máximo (16+)\n• También puedes cambiarlo si estás en niveles 1-3',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white70,
+                      ),
+                      textAlign: TextAlign.left,
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 48),
               Expanded(
                 child: ListView.builder(
@@ -142,15 +208,7 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with SingleTickerProvid
 
   Widget _buildTarjetaEspecie(BuildContext context, Map<String, String> especie) {
     return GestureDetector(
-      onTap: () async {
-        final alebrijeProvider = context.read<AlebrijeProvider>();
-        final matricula = '15662'; // TODO: Obtener de SessionProvider
-        
-        await alebrijeProvider.inicializarAlebrije(
-          matricula,
-          especieBase: especie['especie']!,
-        );
-      },
+      onTap: () => _mostrarDetallesEspecie(context, especie),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(20),
@@ -196,11 +254,101 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with SingleTickerProvid
               ),
             ),
             const Icon(
-              Icons.arrow_forward_ios,
+              Icons.info_outline,
               color: Color(0xFF8B1538),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _mostrarDetallesEspecie(BuildContext context, Map<String, String> especie) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Text(especie['emoji']!),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                especie['nombre']!,
+                style: const TextStyle(color: Color(0xFF8B1538)),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                especie['detalles']!,
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Características:',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF8B1538),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                especie['caracteristicas']!,
+                style: const TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.amber.shade200),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.lightbulb_outline, color: Colors.orange, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Tu alebrije será único con colores y patrones mexicanos aleatorios',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final alebrijeProvider = context.read<AlebrijeProvider>();
+              final sessionProvider = context.read<SessionProvider>();
+              final matricula = sessionProvider.carnet?.matricula ?? '15662';
+              
+              await alebrijeProvider.inicializarAlebrije(
+                matricula,
+                especieBase: especie['especie']!,
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B1538),
+            ),
+            child: const Text('¡Elegir este guardián!', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
