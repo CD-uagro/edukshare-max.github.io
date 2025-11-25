@@ -759,19 +759,27 @@ class ApiService {
           );
 
       print('🎨 ALEBRIJE GET RESPONSE: ${response.statusCode}');
-      print('🎨 RESPONSE BODY: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print('🎨 PARSED DATA: $data');
-        print('🎨 data[\'success\']: ${data['success']}');
-        print('🎨 data[\'data\']: ${data['data']}');
+        
+        // Manejar dos formatos de respuesta:
+        // Formato 1: {"success": true, "data": {...alebrije...}}
+        // Formato 2: {...alebrije directo...}
         
         if (data['success'] == true && data['data'] != null) {
-          print('✅ Alebrije cargado desde backend');
+          // Formato con wrapper
+          print('✅ Alebrije cargado desde backend (formato wrapper)');
           return data['data'] as Map<String, dynamic>;
+        } else if (data['id'] != null && data['matricula'] != null) {
+          // Formato directo (el alebrije es el objeto raíz)
+          print('✅ Alebrije cargado desde backend (formato directo)');
+          print('   - Nombre: ${data['nombre']}');
+          print('   - Matrícula: ${data['matricula']}');
+          return data as Map<String, dynamic>;
         }
-        print('⚠️ Backend devolvió 200 pero data es null o success=false');
+        
+        print('⚠️ Backend devolvió 200 pero formato no reconocido');
         return null;
       } else if (response.statusCode == 404) {
         print('📭 No hay alebrije en backend (normal para nuevo usuario)');
