@@ -759,13 +759,19 @@ class ApiService {
           );
 
       print('🎨 ALEBRIJE GET RESPONSE: ${response.statusCode}');
+      print('🎨 RESPONSE BODY: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        print('🎨 PARSED DATA: $data');
+        print('🎨 data[\'success\']: ${data['success']}');
+        print('🎨 data[\'data\']: ${data['data']}');
+        
         if (data['success'] == true && data['data'] != null) {
           print('✅ Alebrije cargado desde backend');
           return data['data'] as Map<String, dynamic>;
         }
+        print('⚠️ Backend devolvió 200 pero data es null o success=false');
         return null;
       } else if (response.statusCode == 404) {
         print('📭 No hay alebrije en backend (normal para nuevo usuario)');
