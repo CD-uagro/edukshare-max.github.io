@@ -160,6 +160,20 @@ class AlebrijeProvider extends ChangeNotifier {
     await _guardarEstado();
     notifyListeners();
   }
+  
+  /// Renombrar el alebrije
+  Future<void> renombrar(String nuevoNombre) async {
+    if (_alebrije == null) return;
+    
+    _alebrije = _alebrije!.copyWith(
+      nombre: nuevoNombre,
+      updatedAt: DateTime.now(),
+    );
+    
+    print('✏️ Alebrije renombrado a: $nuevoNombre');
+    await _guardarEstado();
+    notifyListeners();
+  }
 
   /// Curar al alebrije (se activa con vacunas)
   Future<void> curar(int cantidad) async {
@@ -399,26 +413,35 @@ class AlebrijeProvider extends ChangeNotifier {
     }
   }
 
-  /// Sincroniza alebrije con backend
+  /// Sincroniza alebrije con backend (Cosmos DB)
   Future<void> _sincronizarConBackend(String token) async {
     if (_alebrije == null) return;
     
     try {
+      print('🔄 Intentando sincronizar con Cosmos DB...');
+      
       // Verificar si ya existe en backend
       final existeEnBackend = await ApiService.getAlebrije(token);
       
       if (existeEnBackend == null) {
-        // Crear nuevo
+        // Crear nuevo en Cosmos DB (contenedor: alebrijes_estudiantes)
         await ApiService.createAlebrije(token, _alebrije!.toJson());
-        print('🔄 Alebrije creado en backend (primera sincronización)');
+        print('✅ Alebrije creado en Cosmos DB (alebrijes_estudiantes)');
+        print('   - Nombre: ${_alebrije!.nombre}');
+        print('   - Matrícula: ${_alebrije!.matricula}');
+        print('   - Especie: ${_alebrije!.dna.especieBase}');
       } else {
-        // Actualizar existente
+        // Actualizar existente en Cosmos DB
         await ApiService.updateAlebrije(token, _alebrije!.toJson());
-        print('🔄 Alebrije sincronizado con backend');
+        print('✅ Alebrije actualizado en Cosmos DB');
+        print('   - Nombre: ${_alebrije!.nombre}');
+        print('   - Nivel: ${_alebrije!.nivelEvolucion}');
       }
     } catch (e) {
       // No interrumpir si falla sincronización - localStorage es suficiente
-      print('⚠️ Sincronización con backend falló (continuando con localStorage): $e');
+      print('⚠️ Sincronización con Cosmos DB falló (continuando con localStorage)');
+      print('   Error: $e');
+      print('   💡 Verifica que el contenedor "alebrijes_estudiantes" exista en SASU');
     }
   }
 }

@@ -266,13 +266,29 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
         backgroundColor: const Color(0xFF8B1538),
-        title: Text(
-          alebrije.nombre,
-          style: const TextStyle(color: Colors.white),
+        title: GestureDetector(
+          onTap: () => _mostrarDialogoRenombrar(context, alebrije),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                alebrije.nombre,
+                style: const TextStyle(color: Colors.white),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.edit, color: Colors.white70, size: 18),
+            ],
+          ),
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.edit, color: Colors.white),
+            tooltip: 'Renombrar',
+            onPressed: () => _mostrarDialogoRenombrar(context, alebrije),
+          ),
+          IconButton(
             icon: const Icon(Icons.history, color: Colors.white),
+            tooltip: 'Historial',
             onPressed: () => setState(() => _mostrarHistorial = !_mostrarHistorial),
           ),
         ],
@@ -1689,6 +1705,98 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
             ],
           ),
         ],
+      ),
+    );
+  }
+  
+  // 📝 RENOMBRAR ALEBRIJE
+  void _mostrarDialogoRenombrar(BuildContext context, alebrije) {
+    final controlador = TextEditingController(text: alebrije.nombre);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Text('✏️ Renombrar ${alebrije.dna.especieBase}'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: controlador,
+              autofocus: true,
+              maxLength: 20,
+              decoration: InputDecoration(
+                labelText: 'Nuevo nombre',
+                hintText: 'Ej: Xóchitl, Cuauhtémoc, Luna...',
+                prefixIcon: const Icon(Icons.pets, color: Color(0xFF8B1538)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFF8B1538), width: 2),
+                ),
+              ),
+              onSubmitted: (valor) {
+                if (valor.trim().isNotEmpty) {
+                  Navigator.pop(context);
+                  _renombrarAlebrije(valor.trim());
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Dale un nombre único a tu alebrije guardián 🎨',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final nuevoNombre = controlador.text.trim();
+              if (nuevoNombre.isNotEmpty) {
+                Navigator.pop(context);
+                _renombrarAlebrije(nuevoNombre);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF8B1538),
+            ),
+            child: const Text('Guardar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Future<void> _renombrarAlebrije(String nuevoNombre) async {
+    final provider = context.read<AlebrijeProvider>();
+    await provider.renombrar(nuevoNombre);
+    
+    setState(() {
+      _mostrarMensajeAlebrije('¡Me encanta mi nuevo nombre! 💕');
+    });
+    
+    _sparkleController.forward(from: 0);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('✨ Alebrije renombrado a "$nuevoNombre"'),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
       ),
     );
   }
