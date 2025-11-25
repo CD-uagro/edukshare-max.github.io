@@ -740,13 +740,41 @@ class SessionProvider extends ChangeNotifier {
   }
 
   // Logout
-  void logout() {
+  Future<void> logout() async {
+    // CRÍTICO: NO borrar 'auth_token' ni 'alebrije_data' de SharedPreferences
+    // para mantener la persistencia del alebrije y poder restaurar sesión
+    
+    // Solo limpiar estado en memoria
     _isLoggedIn = false;
     _token = null;
     _carnet = null;
     _citas = [];
     _promociones = [];
+    _vacunas = [];
+    _consultas = [];
     _error = null;
+    _errorType = null;
+    
+    print('👋 Sesión cerrada (alebrije y token preservados en localStorage)');
+    notifyListeners();
+  }
+  
+  // Logout completo (borra TODO incluyendo alebrije) - usar solo para cambio de cuenta
+  Future<void> logoutCompleto() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear(); // Borra TODO
+    
+    _isLoggedIn = false;
+    _token = null;
+    _carnet = null;
+    _citas = [];
+    _promociones = [];
+    _vacunas = [];
+    _consultas = [];
+    _error = null;
+    _errorType = null;
+    
+    print('🧹 Sesión y datos locales completamente eliminados');
     notifyListeners();
   }
 }

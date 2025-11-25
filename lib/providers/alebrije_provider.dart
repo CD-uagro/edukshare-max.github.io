@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/alebrije_model.dart';
+import '../models/capsula_poder_model.dart';
 import '../providers/session_provider.dart';
 import '../services/api_service.dart';
 import 'dart:math';
@@ -13,10 +14,27 @@ class AlebrijeProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   DateTime _ultimaActualizacion = DateTime.now();
+  
+  // 💊 Sistema de cápsulas
+  List<CapsulaPoder> _capsulas = [];
+  List<CapsulaPoder> _capsulasPendientes = []; // Cápsulas no aplicadas aún
 
   AlebrijeModel? get alebrije => _alebrije;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  
+  // Getters de cápsulas
+  List<CapsulaPoder> get capsulasActivas => _capsulas.where((c) => c.estaActiva).toList();
+  List<CapsulaPoder> get capsulasPendientes => _capsulasPendientes;
+  List<CapsulaPoder> get todasLasCapsulas => _capsulas;
+  
+  // Efectos acumulados de cápsulas activas
+  int get bonosSaludTotal => capsulasActivas.fold(0, (sum, c) => sum + c.bonosSalud);
+  int get bonosHambreTotal => capsulasActivas.fold(0, (sum, c) => sum + c.bonosHambre);
+  int get bonosFelicidadTotal => capsulasActivas.fold(0, (sum, c) => sum + c.bonosFelicidad);
+  int get bonosEnergiaTotal => capsulasActivas.fold(0, (sum, c) => sum + c.bonosEnergia);
+  double get multiplicadorExperienciaTotal => capsulasActivas.fold(1.0, (mult, c) => mult * c.multiplicadorExperiencia);
+  double get reduccionDecaimientoTotal => capsulasActivas.fold(0.0, (sum, c) => sum + c.reduccionDecaimiento).clamp(0.0, 0.9);
   
   /// Genera o recupera el alebrije del estudiante
   Future<void> inicializarAlebrije(String matricula, {String? especieBase}) async {
@@ -32,6 +50,17 @@ class AlebrijeProvider extends ChangeNotifier {
       if (alebrijeJson != null && _alebrije == null) {
         _alebrije = AlebrijeModel.fromJson(jsonDecode(alebrijeJson));
         print('✅ Alebrije cargado desde localStorage: ${_alebrije!.nombre}');
+      }
+      
+      // Cargar cápsulas guardadas
+      final capsulasJson = prefs.getString('alebrije_capsulas');
+      if (capsulasJson != null) {
+        final List<dynamic> capsulasList = jsonDecode(capsulasJson);
+        _capsulas = capsulasList.map((json) => CapsulaPoder.fromJson(json)).toList();
+        
+        // Limpiar cápsulas expiradas
+        _capsulas.removeWhere((c) => !c.estaActiva && c.duracion != null);
+        print('💊 ${capsulasActivas.length} cápsulas activas cargadas');
       }
       
       // Intentar cargar desde backend (respaldo)
@@ -138,7 +167,14 @@ class AlebrijeProvider extends ChangeNotifier {
   Future<void> agregarExperiencia(int puntos, String motivo) async {
     if (_alebrije == null) return;
 
-    final nuevosOPuntos = _alebrije!.puntosExperiencia + puntos;
+    // Aplicar multiplicador de cápsulas activas
+    final puntosConBonus = (puntos * multiplicadorExperienciaTotal).round();
+    
+    if (puntosConBonus > puntos) {
+      print('⚡ Bonus de cápsulas: ${puntos} XP → ${puntosConBonus} XP (x${multiplicadorExperienciaTotal.toStringAsFixed(2)})');
+    }
+
+    final nuevosOPuntos = _alebrije!.puntosExperiencia + puntosConBonus;
     final puntosParaNivel = _calcularPuntosNecesarios(_alebrije!.nivelEvolucion);
 
     if (nuevosOPuntos >= puntosParaNivel) {
@@ -208,7 +244,11 @@ class AlebrijeProvider extends ChangeNotifier {
       // Guardar en localStorage primero (respaldo principal)
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('alebrije_data', jsonEncode(_alebrije!.toJson()));
-      print('💾 Alebrije guardado en localStorage: ${_alebrije!.id}');
+      
+      // Guardar cápsulas
+      await prefs.setString('alebrije_capsulas', jsonEncode(_capsulas.map((c) => c.toJson()).toList()));
+      
+      print('💾 Alebrije y ${_capsulas.length} cápsulas guardados en localStorage');
       
       // Sincronizar con backend (respaldo secundario)
       final token = prefs.getString('auth_token');
@@ -398,14 +438,26 @@ class AlebrijeHealthIntegration {
   Future<void> onConsultaMedica() async {
     await alebrijeProvider.alimentar(30); // +30 hambre
     await alebrijeProvider.agregarExperiencia(50, 'Consulta médica realizada');
+    
+    // 💊 Dar cápsula como recompensa
+    final capsula = CapsulaPowerGenerator.generarCapsula('Consulta Médica');
+    await alebrijeProvider.agregarCapsula(capsula);
+    
     print('🍽️ Alebrije alimentado por consulta médica');
+    print('💊 Cápsula obtenida: ${capsula.nombre} [${CapsulaPowerGenerator.getNombreRareza(capsula.rareza)}]');
   }
 
   /// Se llama cuando el usuario recibe una vacuna
   Future<void> onVacuna() async {
     await alebrijeProvider.curar(40); // +40 salud
     await alebrijeProvider.agregarExperiencia(100, 'Vacuna administrada');
+    
+    // 💊 Dar cápsula como recompensa
+    final capsula = CapsulaPowerGenerator.generarCapsula('Vacunación');
+    await alebrijeProvider.agregarCapsula(capsula);
+    
     print('💉 Alebrije curado por vacuna');
+    print('💊 Cápsula obtenida: ${capsula.nombre} [${CapsulaPowerGenerator.getNombreRareza(capsula.rareza)}]');
   }
 
   /// Se llama cuando el usuario completa un curso (SaberesMX)
@@ -432,5 +484,109 @@ class AlebrijeHealthIntegration {
       await alebrijeProvider.agregarExperiencia(bonus, 'Racha de $diasConsecutivos días');
       print('🔥 Bonus por racha: $diasConsecutivos días consecutivos');
     }
+  }
+  
+  /// Se llama cuando el usuario obtiene una cápsula (consulta/vacuna)
+  Future<void> onCapsulaObtenida(String servicioSalud) async {
+    final capsula = CapsulaPowerGenerator.generarCapsula(servicioSalud);
+    await alebrijeProvider.agregarCapsula(capsula);
+    print('💊 Cápsula ${capsula.nombre} obtenida (${CapsulaPowerGenerator.getNombreRareza(capsula.rareza)})');
+  }
+}
+
+/// Extensión del AlebrijeProvider para sistema de cápsulas
+extension AlebrijeProviderCapsulas on AlebrijeProvider {
+  /// Agrega una nueva cápsula obtenida (va a pendientes)
+  Future<void> agregarCapsula(CapsulaPoder capsula) async {
+    _capsulasPendientes.add(capsula);
+    print('💊 Cápsula obtenida: ${capsula.nombre} (${CapsulaPowerGenerator.getNombreRareza(capsula.rareza)})');
+    
+    // Sincronizar con backend (opcional, no bloquea)
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+      if (token != null) {
+        await ApiService.registrarCapsula(token, capsula.toJson(), capsula.origenServicio);
+      }
+    } catch (e) {
+      print('⚠️ Error al sincronizar cápsula con backend: $e');
+    }
+    
+    await _guardarEstado();
+    notifyListeners();
+  }
+  
+  /// Aplica una cápsula pendiente al alebrije
+  Future<void> aplicarCapsula(String capsulaId) async {
+    final index = _capsulasPendientes.indexWhere((c) => c.id == capsulaId);
+    if (index == -1) {
+      print('❌ Cápsula no encontrada: $capsulaId');
+      return;
+    }
+    
+    final capsula = _capsulasPendientes.removeAt(index);
+    
+    // Activar la cápsula
+    final capsulaActivada = capsula.copyWith(
+      activa: true,
+      activadaEn: DateTime.now(),
+    );
+    
+    _capsulas.add(capsulaActivada);
+    
+    // Aplicar efectos inmediatos si los hay
+    if (_alebrije != null) {
+      final estadoActual = _alebrije!.estado;
+      final nuevoEstado = AlebrijeEstado(
+        hambre: (estadoActual.hambre + capsulaActivada.bonosHambre).clamp(0, 100),
+        felicidad: (estadoActual.felicidad + capsulaActivada.bonosFelicidad).clamp(0, 100),
+        salud: (estadoActual.salud + capsulaActivada.bonosSalud).clamp(0, 100),
+        energia: (estadoActual.energia + capsulaActivada.bonosEnergia).clamp(0, 100),
+        diasConsecutivos: estadoActual.diasConsecutivos,
+        ultimaAlimentacion: estadoActual.ultimaAlimentacion,
+        ultimaInteraccion: DateTime.now(),
+        ultimoCuidado: estadoActual.ultimoCuidado,
+      );
+      
+      _alebrije = _alebrije!.copyWith(
+        estado: nuevoEstado,
+        updatedAt: DateTime.now(),
+      );
+    }
+    
+    print('✨ Cápsula aplicada: ${capsulaActivada.nombre}');
+    if (capsulaActivada.duracion != null) {
+      print('⏱️ Duración: ${capsulaActivada.duracion!.inHours}h');
+    } else {
+      print('🎯 Efecto PERMANENTE');
+    }
+    
+    await _guardarEstado();
+    notifyListeners();
+  }
+  
+  /// Elimina cápsulas expiradas
+  Future<void> limpiarCapsulasExpiradas() async {
+    final antes = _capsulas.length;
+    _capsulas.removeWhere((c) => !c.estaActiva && c.duracion != null);
+    
+    if (_capsulas.length < antes) {
+      print('🧹 ${antes - _capsulas.length} cápsulas expiradas eliminadas');
+      await _guardarEstado();
+      notifyListeners();
+    }
+  }
+  
+  /// Obtiene estadísticas totales con bonos de cápsulas
+  Map<String, int> getEstadisticasConBonos() {
+    if (_alebrije == null) return {};
+    
+    final estado = _alebrije!.estado;
+    return {
+      'hambre': (estado.hambre + bonosHambreTotal).clamp(0, 100),
+      'felicidad': (estado.felicidad + bonosFelicidadTotal).clamp(0, 100),
+      'salud': (estado.salud + bonosSaludTotal).clamp(0, 100),
+      'energia': (estado.energia + bonosEnergiaTotal).clamp(0, 100),
+    };
   }
 }

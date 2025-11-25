@@ -5,6 +5,7 @@ import 'dart:convert';
 import '../providers/alebrije_provider.dart';
 import '../providers/session_provider.dart';
 import '../services/alebrije_generator.dart';
+import '../models/capsula_poder_model.dart';
 
 /// Pantalla principal de interacción con el Alebrije Tamagotchi
 class AlebrijeScreen extends StatefulWidget {
@@ -551,6 +552,9 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
           
           // Botones de interacción
           _buildBotonesInteraccion(provider),
+          
+          // 💊 PANEL DE CÁPSULAS
+          _buildPanelCapsulas(provider),
           
           // Información de decaimiento
           _buildInfoDecaimiento(alebrije),
@@ -1378,6 +1382,304 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
           ),
         ),
       ],
+    );
+  }
+  
+  // 💊 PANEL DE CÁPSULAS
+  Widget _buildPanelCapsulas(AlebrijeProvider provider) {
+    final capsulasPendientes = provider.capsulasPendientes;
+    final capsulasActivas = provider.capsulasActivas;
+    
+    if (capsulasPendientes.isEmpty && capsulasActivas.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.purple.shade50,
+            Colors.pink.shade50,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.purple.shade200, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                '💊 Cápsulas de Poder',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF8B1538),
+                ),
+              ),
+              const Spacer(),
+              if (capsulasActivas.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${capsulasActivas.length} activas',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          // Cápsulas pendientes (para aplicar)
+          if (capsulasPendientes.isNotEmpty) ...[
+            const Text(
+              '🎁 Nuevas cápsulas obtenidas:',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF8B1538),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...capsulasPendientes.map((capsula) => _buildCapsulaPendiente(capsula, provider)),
+          ],
+          
+          // Cápsulas activas
+          if (capsulasActivas.isNotEmpty) ...[
+            if (capsulasPendientes.isNotEmpty) const Divider(height: 24),
+            const Text(
+              '✨ Efectos activos:',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF8B1538),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ...capsulasActivas.map((capsula) => _buildCapsulaActiva(capsula)),
+          ],
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildCapsulaPendiente(capsula, AlebrijeProvider provider) {
+    final rarezaColor = CapsulaPowerGenerator.getColorRareza(capsula.rareza);
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: rarezaColor, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: rarezaColor.withOpacity(0.3),
+            blurRadius: 8,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Emoji de la cápsula
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: capsula.color.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              capsula.emoji,
+              style: const TextStyle(fontSize: 32),
+            ),
+          ),
+          const SizedBox(width: 12),
+          
+          // Info de la cápsula
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      capsula.nombre,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: rarezaColor,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        CapsulaPowerGenerator.getNombreRareza(capsula.rareza),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  capsula.descripcion,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'De: ${capsula.origenServicio}',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey[500],
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Botón aplicar
+          ElevatedButton(
+            onPressed: () async {
+              await provider.aplicarCapsula(capsula.id);
+              _mostrarMensajeAlebrije('¡Siento el poder de la cápsula! ✨');
+              _sparkleController.forward(from: 0);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: capsula.color,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            ),
+            child: const Text(
+              '¡Aplicar!',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildCapsulaActiva(capsula) {
+    final rarezaColor = CapsulaPowerGenerator.getColorRareza(capsula.rareza);
+    final porcentaje = capsula.porcentajeDuracion;
+    final tiempoRestante = capsula.tiempoRestante;
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: rarezaColor.withOpacity(0.5), width: 1),
+      ),
+      child: Row(
+        children: [
+          Text(
+            capsula.emoji,
+            style: const TextStyle(fontSize: 24),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  capsula.nombre,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (tiempoRestante != null) ...[
+                  const SizedBox(height: 4),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: porcentaje,
+                      backgroundColor: Colors.grey[200],
+                      valueColor: AlwaysStoppedAnimation<Color>(capsula.color),
+                      minHeight: 4,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    tiempoRestante.inHours > 0
+                        ? '${tiempoRestante.inHours}h ${tiempoRestante.inMinutes % 60}m restantes'
+                        : '${tiempoRestante.inMinutes}m restantes',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.all_inclusive, size: 12, color: Colors.amber[700]),
+                      const SizedBox(width: 4),
+                      Text(
+                        'PERMANENTE',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.amber[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          
+          // Efectos visuales
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (capsula.bonosSalud > 0)
+                Text('❤️ +${capsula.bonosSalud}', style: const TextStyle(fontSize: 10)),
+              if (capsula.bonosHambre > 0)
+                Text('🍽️ +${capsula.bonosHambre}', style: const TextStyle(fontSize: 10)),
+              if (capsula.bonosFelicidad > 0)
+                Text('😊 +${capsula.bonosFelicidad}', style: const TextStyle(fontSize: 10)),
+              if (capsula.bonosEnergia > 0)
+                Text('⚡ +${capsula.bonosEnergia}', style: const TextStyle(fontSize: 10)),
+              if (capsula.multiplicadorExperiencia > 1.0)
+                Text('⭐ x${capsula.multiplicadorExperiencia.toStringAsFixed(1)}', style: const TextStyle(fontSize: 10)),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

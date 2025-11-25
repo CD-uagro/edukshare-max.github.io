@@ -851,4 +851,46 @@ class ApiService {
     return result ?? false;
   }
 
+  /// POST /me/alebrije/capsula - Registrar cápsula obtenida
+  static Future<bool> registrarCapsula(
+    String token,
+    Map<String, dynamic> capsulaData,
+    String servicioSalud,
+  ) async {
+    final result = await _retryWithBackoff(
+      () async {
+        final response = await http
+            .post(
+              Uri.parse('$baseUrl/me/alebrije/capsula'),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $token',
+              },
+              body: jsonEncode({
+                'capsula': capsulaData,
+                'servicioSalud': servicioSalud,
+              }),
+            )
+            .timeout(
+              shortTimeout,
+              onTimeout: () {
+                throw Exception('TIMEOUT: Timeout registrando cápsula');
+              },
+            );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          print('💊 Cápsula registrada: ${data['capsula']['nombre']}');
+          return true;
+        } else {
+          print('⚠️ Error registrando cápsula: ${response.statusCode}');
+          return false;
+        }
+      },
+      operationName: 'CAPSULA alebrije',
+      maxAttempts: 1, // No reintentar, es opcional
+    );
+    return result ?? false;
+  }
+
 }
