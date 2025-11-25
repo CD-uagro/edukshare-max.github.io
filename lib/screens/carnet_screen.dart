@@ -156,6 +156,8 @@ class _CarnetScreenState extends State<CarnetScreen> {
             onSelected: (value) {
               if (value == 'cambiar_diseno') {
                 _mostrarSelectorDiseno(context);
+              } else if (value == 'mi_alebrije') {
+                Navigator.of(context).pushNamed('/alebrije');
               } else if (value == 'logout') {
                 context.read<SessionProvider>().logout();
                 Navigator.of(context).pushReplacementNamed('/login');
@@ -169,6 +171,16 @@ class _CarnetScreenState extends State<CarnetScreen> {
                     Icon(Icons.palette_outlined, size: 20),
                     SizedBox(width: 12),
                     Text('Cambiar diseño'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'mi_alebrije',
+                child: Row(
+                  children: [
+                    Icon(Icons.pets, size: 20, color: Color(0xFF8B1538)),
+                    SizedBox(width: 12),
+                    Text('Mi Alebrije Guardián 🎨', style: TextStyle(fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),

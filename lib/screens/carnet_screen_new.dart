@@ -931,6 +931,18 @@ class _CarnetScreenNewState extends State<CarnetScreenNew> with TickerProviderSt
             ),
             
             ListTile(
+              leading: const Icon(Icons.pets, color: Color(0xFF8B1538)),
+              title: const Text('Mi Alebrije Guardián 🎨', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: const Text('Tu compañero virtual de salud'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/alebrije');
+              },
+            ),
+            
+            const Divider(height: 1, thickness: 2),
+            
+            ListTile(
               leading: const Icon(Icons.assignment_outlined, color: Color(0xFF8B1538)),
               title: const Text('Mis Consultas de Atención'),
               onTap: () {
