@@ -181,18 +181,18 @@ class SessionProvider extends ChangeNotifier {
           print('❄️ Login completado después de cold start (${result['responseTime']}ms)');
         }
         
-        // Cargar todos los datos SECUENCIALMENTE con delays para evitar 429
+        // Cargar todos los datos SECUENCIALMENTE con delays LARGOS para evitar 429
         await _loadCarnetData();
-        await Future.delayed(const Duration(seconds: 2)); // Esperar 2 segundos entre llamadas
+        await Future.delayed(const Duration(seconds: 4)); // ⏱️ 4 segundos entre llamadas
         
         await _loadCitasData();
-        await Future.delayed(const Duration(seconds: 2));
+        await Future.delayed(const Duration(seconds: 4));
         
         await _loadConsultasData();
-        await Future.delayed(const Duration(seconds: 2));
+        await Future.delayed(const Duration(seconds: 4));
         
         await _loadVacunasData();
-        await Future.delayed(const Duration(seconds: 2));
+        await Future.delayed(const Duration(seconds: 4));
         
         await loadPromociones(notifyWhenDone: false);
         

@@ -51,9 +51,13 @@ class _CarnetScreenState extends State<CarnetScreen> {
   @override
   void initState() {
     super.initState();
-    // Cargar promociones de salud al inicializar
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<SessionProvider>().loadPromociones();
+    // ⏱️ Cargar promociones CON DELAY para evitar 429 rate limiting
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Esperar 5 segundos después de cargar la pantalla para evitar rate limiting
+      await Future.delayed(const Duration(seconds: 5));
+      if (mounted) {
+        context.read<SessionProvider>().loadPromociones();
+      }
     });
   }
 

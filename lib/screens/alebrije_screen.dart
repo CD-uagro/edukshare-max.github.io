@@ -61,8 +61,13 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
       duration: const Duration(milliseconds: 1500),
     );
 
-    // Intentar cargar alebrije existente primero
+    // ⏱️ Cargar alebrije CON DELAY para evitar 429 rate limiting
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Esperar 8 segundos para dar tiempo a que terminen las llamadas de promociones
+      await Future.delayed(const Duration(seconds: 8));
+      
+      if (!mounted) return;
+      
       final alebrijeProvider = context.read<AlebrijeProvider>();
       final sessionProvider = context.read<SessionProvider>();
       final matricula = sessionProvider.carnet?.matricula ?? '15662';
@@ -76,9 +81,11 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
         await alebrijeProvider.actualizarEstado();
       }
       
-      _evaluarEstadoEmocional();
-      _iniciarAnimacionesAutomaticas();
-      _iniciarSincronizacionPeriodica(); // Sincronizar cada 2 minutos
+      if (mounted) {
+        _evaluarEstadoEmocional();
+        _iniciarAnimacionesAutomaticas();
+        _iniciarSincronizacionPeriodica(); // Sincronizar cada 2 minutos
+      }
     });
   }
   
