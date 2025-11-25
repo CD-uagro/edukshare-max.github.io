@@ -14,33 +14,216 @@ class AlebrijeScreen extends StatefulWidget {
   State<AlebrijeScreen> createState() => _AlebrijeScreenState();
 }
 
-class _AlebrijeScreenState extends State<AlebrijeScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
+class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStateMixin {
+  late AnimationController _breathingController;
+  late AnimationController _bounceController;
+  late AnimationController _shakeController;
+  late AnimationController _sparkleController;
+  
   bool _mostrarHistorial = false;
+  String _estadoEmocional = 'neutral'; // neutral, feliz, triste, hambriento, jugueton, cansado
+  bool _estaSiendoTocado = false;
+  int _toquesConsecutivos = 0;
+  DateTime? _ultimoToque;
+  
+  final List<Offset> _particulas = [];
+  final List<String> _mensajesAlebrije = [];
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
+    
+    // Animación de respiración (siempre activa)
+    _breathingController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 2),
+      duration: const Duration(milliseconds: 2000),
     )..repeat(reverse: true);
+    
+    // Animación de rebote (para cuando está feliz)
+    _bounceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    
+    // Animación de sacudida (para llamar atención)
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+    
+    // Animación de brillos/partículas
+    _sparkleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
 
     // Actualizar estado al entrar
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AlebrijeProvider>().actualizarEstado();
+      _evaluarEstadoEmocional();
+      _iniciarAnimacionesAutomaticas();
     });
+  }
+  
+  void _iniciarAnimacionesAutomaticas() {
+    // Cada 10 segundos, el alebrije hace algo aleatorio
+    Future.delayed(const Duration(seconds: 10), () {
+      if (mounted) {
+        _animacionAleatoria();
+        _iniciarAnimacionesAutomaticas();
+      }
+    });
+  }
+  
+  void _animacionAleatoria() {
+    final random = DateTime.now().millisecond % 3;
+    if (random == 0) {
+      _mostrarMensajeAlebrije(_obtenerMensajeSegunEstado());
+    } else if (random == 1) {
+      _ejecutarRebote();
+    } else {
+      _ejecutarSacudida();
+    }
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
+    _breathingController.dispose();
+    _bounceController.dispose();
+    _shakeController.dispose();
+    _sparkleController.dispose();
     super.dispose();
+  }
+
+  void _evaluarEstadoEmocional() {
+    final alebrije = context.read<AlebrijeProvider>().alebrije;
+    if (alebrije == null) return;
+    
+    setState(() {
+      if (alebrije.estado.hambre < 30) {
+        _estadoEmocional = 'hambriento';
+      } else if (alebrije.estado.felicidad > 80) {
+        _estadoEmocional = 'feliz';
+      } else if (alebrije.estado.energia < 30) {
+        _estadoEmocional = 'cansado';
+      } else if (alebrije.estado.felicidad < 30) {
+        _estadoEmocional = 'triste';
+      } else if (alebrije.estado.felicidad > 60 && alebrije.estado.energia > 60) {
+        _estadoEmocional = 'jugueton';
+      } else {
+        _estadoEmocional = 'neutral';
+      }
+    });
+  }
+  
+  String _obtenerMensajeSegunEstado() {
+    switch (_estadoEmocional) {
+      case 'hambriento':
+        return '¡Tengo hambre! 🍽️';
+      case 'feliz':
+        return '¡Me siento genial! 😄';
+      case 'cansado':
+        return 'Necesito descansar... 😴';
+      case 'triste':
+        return 'Me siento solo... 😢';
+      case 'jugueton':
+        return '¡Juguemos! 🎮';
+      default:
+        return 'Hola, ¿cómo estás? 👋';
+    }
+  }
+  
+  void _mostrarMensajeAlebrije(String mensaje) {
+    setState(() {
+      _mensajesAlebrije.add(mensaje);
+    });
+    
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() {
+          _mensajesAlebrije.remove(mensaje);
+        });
+      }
+    });
+  }
+  
+  void _ejecutarRebote() {
+    _bounceController.forward(from: 0).then((_) {
+      _bounceController.reverse();
+    });
+  }
+  
+  void _ejecutarSacudida() {
+    _shakeController.forward(from: 0).then((_) {
+      _shakeController.forward(from: 0).then((_) {
+        _shakeController.forward(from: 0);
+      });
+    });
+  }
+  
+  void _crearParticulasCorazon(Offset posicion) {
+    setState(() {
+      for (int i = 0; i < 5; i++) {
+        _particulas.add(posicion);
+      }
+    });
+    
+    Future.delayed(const Duration(milliseconds: 1000), () {
+      if (mounted) {
+        setState(() {
+          _particulas.clear();
+        });
+      }
+    });
+  }
+  
+  void _manejarToque() {
+    final ahora = DateTime.now();
+    if (_ultimoToque != null && ahora.difference(_ultimoToque!).inSeconds < 2) {
+      _toquesConsecutivos++;
+    } else {
+      _toquesConsecutivos = 1;
+    }
+    _ultimoToque = ahora;
+    
+    setState(() {
+      _estaSiendoTocado = true;
+    });
+    
+    // Reacciones según toques
+    if (_toquesConsecutivos >= 5) {
+      _mostrarMensajeAlebrije('¡Jajaja, eso hace cosquillas! 😆');
+      _ejecutarSacudida();
+      _sparkleController.forward(from: 0);
+      _toquesConsecutivos = 0;
+    } else if (_toquesConsecutivos >= 3) {
+      _mostrarMensajeAlebrije('¡Me encanta tu atención! ❤️');
+      _ejecutarRebote();
+    } else {
+      final mensajes = ['¡Hola! 👋', '¿Qué tal? 😊', 'Me gusta esto 🥰', '¡Sigue así! ✨'];
+      _mostrarMensajeAlebrije(mensajes[_toquesConsecutivos % mensajes.length]);
+    }
+    
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (mounted) {
+        setState(() {
+          _estaSiendoTocado = false;
+        });
+      }
+    });
+    
+    // Dar experiencia por interacción
+    context.read<AlebrijeProvider>().jugar();
   }
 
   @override
   Widget build(BuildContext context) {
     final alebrijeProvider = context.watch<AlebrijeProvider>();
+    
+    // Actualizar estado emocional cuando cambie el estado del alebrije
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _evaluarEstadoEmocional();
+    });
 
     if (alebrijeProvider.isLoading) {
       return const Scaffold(
@@ -369,6 +552,9 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with SingleTickerProvid
           // Botones de interacción
           _buildBotonesInteraccion(provider),
           
+          // Minijuegos interactivos
+          _buildMinijuegos(provider),
+          
           // Estado emocional
           _buildEstadoEmocional(alebrije),
         ],
@@ -433,26 +619,235 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with SingleTickerProvid
     final generator = AlebrijeGenerator(alebrije);
     final svgString = generator.generarSVG(width: 300, height: 300);
 
-    return AnimatedBuilder(
-      animation: _animationController,
-      builder: (context, child) {
-        final scale = 1.0 + (_animationController.value * 0.05);
-        final translateY = _animationController.value * 10;
-
-        return Transform.translate(
-          offset: Offset(0, translateY),
-          child: Transform.scale(
-            scale: scale,
-            child: Container(
-              width: 300,
-              height: 300,
-              margin: const EdgeInsets.all(20),
-              child: SvgPicture.string(svgString),
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Aura brillante según estado emocional
+        AnimatedBuilder(
+          animation: _sparkleController,
+          builder: (context, child) {
+            return Container(
+              width: 320,
+              height: 320,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: _getColorEstadoEmocional().withOpacity(0.3 * _sparkleController.value),
+                    blurRadius: 40 + (20 * _sparkleController.value),
+                    spreadRadius: 10 + (10 * _sparkleController.value),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        
+        // Alebrije con múltiples animaciones combinadas
+        GestureDetector(
+          onTap: _manejarToque,
+          onLongPress: () {
+            _mostrarMensajeAlebrije('¡Me haces sentir especial! 💖');
+            _crearParticulasCorazon(const Offset(150, 150));
+            _sparkleController.forward(from: 0);
+            context.read<AlebrijeProvider>().jugar();
+          },
+          child: AnimatedBuilder(
+            animation: Listenable.merge([
+              _breathingController,
+              _bounceController,
+              _shakeController,
+            ]),
+            builder: (context, child) {
+              // Respiración suave
+              final breatheScale = 1.0 + (_breathingController.value * 0.05);
+              final breatheY = _breathingController.value * 8;
+              
+              // Rebote cuando está feliz
+              final bounceY = -(_bounceController.value * 30);
+              
+              // Sacudida de atención
+              final shakeX = (_shakeController.value - 0.5) * 20;
+              
+              // Escala aumentada cuando es tocado
+              final touchScale = _estaSiendoTocado ? 1.1 : 1.0;
+              
+              return Transform.translate(
+                offset: Offset(shakeX, breatheY + bounceY),
+                child: Transform.scale(
+                  scale: breatheScale * touchScale,
+                  child: Container(
+                    width: 300,
+                    height: 300,
+                    decoration: _estaSiendoTocado
+                        ? BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.yellow.withOpacity(0.5),
+                                blurRadius: 30,
+                                spreadRadius: 10,
+                              ),
+                            ],
+                          )
+                        : null,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SvgPicture.string(svgString),
+                        
+                        // Emoji de expresión flotante
+                        Positioned(
+                          top: 20,
+                          child: _buildEmojiExpresion(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        
+        // Mensajes del alebrije (burbujas de diálogo)
+        ..._mensajesAlebrije.asMap().entries.map((entry) {
+          return Positioned(
+            top: 50 - (entry.key * 60.0),
+            child: TweenAnimationBuilder(
+              duration: const Duration(milliseconds: 300),
+              tween: Tween<double>(begin: 0, end: 1),
+              builder: (context, double value, child) {
+                return Transform.scale(
+                  scale: value,
+                  child: Opacity(
+                    opacity: value,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        entry.value,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          );
+        }).toList(),
+        
+        // Indicador de toque "Toca aquí"
+        if (_toquesConsecutivos == 0 && _ultimoToque == null)
+          Positioned(
+            bottom: 10,
+            child: TweenAnimationBuilder(
+              duration: const Duration(milliseconds: 1500),
+              tween: Tween<double>(begin: 0, end: 1),
+              builder: (context, double value, child) {
+                return Opacity(
+                  opacity: 0.5 + (value * 0.5),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.touch_app, size: 20, color: Color(0xFF8B1538)),
+                      SizedBox(width: 4),
+                      Text(
+                        '¡Tócame!',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF8B1538),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+  
+  Widget _buildEmojiExpresion() {
+    String emoji;
+    switch (_estadoEmocional) {
+      case 'hambriento':
+        emoji = '🍽️';
+        break;
+      case 'feliz':
+        emoji = '😄';
+        break;
+      case 'cansado':
+        emoji = '😴';
+        break;
+      case 'triste':
+        emoji = '😢';
+        break;
+      case 'jugueton':
+        emoji = '🎮';
+        break;
+      default:
+        emoji = '😊';
+    }
+    
+    return TweenAnimationBuilder(
+      duration: const Duration(milliseconds: 500),
+      tween: Tween<double>(begin: 0, end: 1),
+      builder: (context, double value, child) {
+        return Transform.scale(
+          scale: 0.8 + (value * 0.2),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                ),
+              ],
+            ),
+            child: Text(
+              emoji,
+              style: const TextStyle(fontSize: 24),
             ),
           ),
         );
       },
     );
+  }
+  
+  Color _getColorEstadoEmocional() {
+    switch (_estadoEmocional) {
+      case 'hambriento':
+        return Colors.orange;
+      case 'feliz':
+        return Colors.yellow;
+      case 'cansado':
+        return Colors.blue;
+      case 'triste':
+        return Colors.grey;
+      case 'jugueton':
+        return Colors.green;
+      default:
+        return const Color(0xFF8B1538);
+    }
   }
 
   Widget _buildBarrasEstado(alebrije) {
@@ -581,30 +976,102 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with SingleTickerProvid
     required Color color,
     required VoidCallback onTap,
   }) {
-    return ElevatedButton(
-      onPressed: onTap,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: Colors.white, size: 32),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
+    return TweenAnimationBuilder(
+      duration: const Duration(milliseconds: 300),
+      tween: Tween<double>(begin: 1, end: 1),
+      builder: (context, double scale, child) {
+        return Transform.scale(
+          scale: scale,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                // Animación de pulsación
+                setState(() {});
+                
+                // Feedback visual y sonoro
+                _ejecutarRebote();
+                _mostrarMensajeAlebrije(_obtenerMensajeAccion(label));
+                
+                // Efecto de partículas
+                _sparkleController.forward(from: 0);
+                
+                // Ejecutar acción
+                onTap();
+                
+                // Re-evaluar estado emocional
+                Future.delayed(const Duration(milliseconds: 500), () {
+                  _evaluarEstadoEmocional();
+                });
+              },
+              onTapDown: (_) {
+                setState(() {});
+              },
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      color,
+                      color.withOpacity(0.7),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(icon, color: Colors.white, size: 32),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
+  }
+  
+  String _obtenerMensajeAccion(String accion) {
+    switch (accion) {
+      case 'Alimentar':
+        return '¡Mmm, delicioso! 😋';
+      case 'Jugar':
+        return '¡Esto es divertido! 🎉';
+      case 'Curar':
+        return 'Me siento mejor 💊';
+      case 'Descansar':
+        return 'Zzz... 😴';
+      default:
+        return '¡Gracias! ❤️';
+    }
   }
 
   Widget _buildEstadoEmocional(alebrije) {
@@ -676,6 +1143,394 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with SingleTickerProvid
               '${evolucion.fecha.day}/${evolucion.fecha.month}/${evolucion.fecha.year}',
             ),
           ),
+        );
+      },
+    );
+  }
+  
+  Widget _buildMinijuegos(AlebrijeProvider provider) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.games, color: Color(0xFF8B1538)),
+              SizedBox(width: 8),
+              Text(
+                'Minijuegos Interactivos',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF8B1538),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          // Carrera de colores - desliza rápido
+          _buildMinijuego(
+            titulo: '🎨 Carrera de Colores',
+            descripcion: '¡Toca 10 veces rápido!',
+            icono: Icons.palette,
+            color: Colors.purple,
+            onJugar: () => _jugarCarreraColores(provider),
+          ),
+          
+          const SizedBox(height: 8),
+          
+          // Encuentra al alebrije - memoriza patrón
+          _buildMinijuego(
+            titulo: '🔍 Encuentra el Patrón',
+            descripcion: 'Memoriza y repite',
+            icono: Icons.visibility,
+            color: Colors.blue,
+            onJugar: () => _jugarEncontrarPatron(provider),
+          ),
+          
+          const SizedBox(height: 8),
+          
+          // Alimentación rápida
+          _buildMinijuego(
+            titulo: '⚡ Reacción Rápida',
+            descripcion: 'Toca cuando brille',
+            icono: Icons.flash_on,
+            color: Colors.orange,
+            onJugar: () => _jugarReaccionRapida(provider),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildMinijuego({
+    required String titulo,
+    required String descripcion,
+    required IconData icono,
+    required Color color,
+    required VoidCallback onJugar,
+  }) {
+    return InkWell(
+      onTap: onJugar,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
+          ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icono, color: Colors.white, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    titulo,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                  ),
+                  Text(
+                    descripcion,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.play_arrow, color: color),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // Minijuego 1: Carrera de Colores
+  void _jugarCarreraColores(AlebrijeProvider provider) {
+    int toques = 0;
+    final inicio = DateTime.now();
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('🎨 ¡Carrera de Colores!'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Toques: $toques/10',
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 20),
+                  GestureDetector(
+                    onTap: () {
+                      setDialogState(() {
+                        toques++;
+                        _ejecutarRebote();
+                      });
+                      
+                      if (toques >= 10) {
+                        final duracion = DateTime.now().difference(inicio);
+                        Navigator.pop(context);
+                        
+                        final puntos = duracion.inSeconds < 3 ? 50 : (duracion.inSeconds < 5 ? 30 : 15);
+                        provider.agregarExperiencia(puntos, 'Ganaste Carrera de Colores');
+                        _mostrarMensajeAlebrije('¡Increíble velocidad! +$puntos XP 🏆');
+                        _sparkleController.forward(from: 0);
+                      }
+                    },
+                    child: Container(
+                      width: 150,
+                      height: 150,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.purple,
+                            Colors.pink,
+                            Colors.orange,
+                          ],
+                        ),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.purple.withOpacity(0.5),
+                            blurRadius: 20,
+                            spreadRadius: 5,
+                          ),
+                        ],
+                      ),
+                      child: const Center(
+                        child: Text(
+                          '¡TOCA!',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+  
+  // Minijuego 2: Encontrar Patrón
+  void _jugarEncontrarPatron(AlebrijeProvider provider) {
+    final patron = List.generate(4, (_) => DateTime.now().millisecond % 4);
+    int paso = 0;
+    bool mostrandoPatron = true;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            if (mostrandoPatron) {
+              // Mostrar patrón automáticamente
+              Future.delayed(const Duration(milliseconds: 500), () {
+                if (paso < patron.length && mounted) {
+                  setDialogState(() => paso++);
+                  _ejecutarSacudida();
+                } else if (paso >= patron.length) {
+                  Future.delayed(const Duration(milliseconds: 500), () {
+                    if (mounted) {
+                      setDialogState(() {
+                        mostrandoPatron = false;
+                        paso = 0;
+                      });
+                    }
+                  });
+                }
+              });
+            }
+            
+            return AlertDialog(
+              title: Text(mostrandoPatron ? '👀 Memoriza' : '🔍 Repite'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GridView.count(
+                    shrinkWrap: true,
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    children: List.generate(4, (index) {
+                      final colores = [Colors.red, Colors.blue, Colors.green, Colors.yellow];
+                      final activo = mostrandoPatron && paso > 0 && patron[paso - 1] == index;
+                      
+                      return GestureDetector(
+                        onTap: mostrandoPatron
+                            ? null
+                            : () {
+                                if (patron[paso] == index) {
+                                  setDialogState(() => paso++);
+                                  _ejecutarRebote();
+                                  
+                                  if (paso >= patron.length) {
+                                    Navigator.pop(context);
+                                    provider.agregarExperiencia(40, 'Patrón completado');
+                                    _mostrarMensajeAlebrije('¡Memoria perfecta! +40 XP 🧠');
+                                    _sparkleController.forward(from: 0);
+                                  }
+                                } else {
+                                  Navigator.pop(context);
+                                  _mostrarMensajeAlebrije('Casi... ¡Inténtalo de nuevo! 💪');
+                                }
+                              },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: activo ? colores[index] : colores[index].withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: activo ? Colors.white : colores[index],
+                              width: 3,
+                            ),
+                            boxShadow: activo
+                                ? [
+                                    BoxShadow(
+                                      color: colores[index].withOpacity(0.5),
+                                      blurRadius: 20,
+                                      spreadRadius: 5,
+                                    ),
+                                  ]
+                                : [],
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+  
+  // Minijuego 3: Reacción Rápida
+  void _jugarReaccionRapida(AlebrijeProvider provider) {
+    bool brillando = false;
+    DateTime? momentoBrillo;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        // Esperar tiempo aleatorio y luego brillar
+        Future.delayed(Duration(milliseconds: 1000 + (DateTime.now().millisecond % 3000)), () {
+          if (mounted) {
+            momentoBrillo = DateTime.now();
+            setState(() => brillando = true);
+          }
+        });
+        
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('⚡ ¡Reacción Rápida!'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    brillando ? '¡TOCA AHORA!' : 'Espera a que brille...',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(height: 20),
+                  GestureDetector(
+                    onTap: () {
+                      if (brillando && momentoBrillo != null) {
+                        final reaccion = DateTime.now().difference(momentoBrillo!);
+                        Navigator.pop(context);
+                        
+                        final puntos = reaccion.inMilliseconds < 300
+                            ? 60
+                            : (reaccion.inMilliseconds < 500 ? 40 : 25);
+                        
+                        provider.agregarExperiencia(puntos, 'Reacción rápida');
+                        _mostrarMensajeAlebrije(
+                          '¡${reaccion.inMilliseconds}ms! Increíble +$puntos XP ⚡',
+                        );
+                        _sparkleController.forward(from: 0);
+                      }
+                    },
+                    child: Container(
+                      width: 150,
+                      height: 150,
+                      decoration: BoxDecoration(
+                        color: brillando ? Colors.yellow : Colors.grey[300],
+                        shape: BoxShape.circle,
+                        boxShadow: brillando
+                            ? [
+                                BoxShadow(
+                                  color: Colors.yellow.withOpacity(0.8),
+                                  blurRadius: 30,
+                                  spreadRadius: 10,
+                                ),
+                              ]
+                            : [],
+                      ),
+                      child: Center(
+                        child: Icon(
+                          Icons.flash_on,
+                          size: 60,
+                          color: brillando ? Colors.orange : Colors.grey[500],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
