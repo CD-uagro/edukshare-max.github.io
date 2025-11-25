@@ -8,6 +8,7 @@ import '../providers/alebrije_provider.dart';
 import '../providers/session_provider.dart';
 import '../services/alebrije_generator.dart';
 import '../models/capsula_poder_model.dart';
+import '../models/alebrije_model.dart';
 
 /// Pantalla principal de interacción con el Alebrije Tamagotchi
 class AlebrijeScreen extends StatefulWidget {
@@ -1150,8 +1151,19 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                 child: _buildBotonAccion(
                   icon: Icons.restaurant,
                   label: 'Alimentar',
+                  contador: '${provider.alebrije!.estado.alimentacionesHoy}/${AlebrijeEstado.maxAlimentacionesDia}',
                   color: Colors.orange,
+                  deshabilitado: !provider.alebrije!.estado.puedeAlimentar,
                   onTap: () {
+                    if (!provider.alebrije!.estado.puedeAlimentar) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('🍽️ Límite alcanzado hoy (${AlebrijeEstado.maxAlimentacionesDia} veces). Vuelve mañana.'),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                      return;
+                    }
                     provider.alimentar(20);
                     final xpBase = 15;
                     final mult = provider.multiplicadorExperienciaTotal;
@@ -1168,8 +1180,19 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                 child: _buildBotonAccion(
                   icon: Icons.sports_esports,
                   label: 'Jugar',
+                  contador: '${provider.alebrije!.estado.juegosHoy}/${AlebrijeEstado.maxJuegosDia}',
                   color: Colors.purple,
+                  deshabilitado: !provider.alebrije!.estado.puedeJugar,
                   onTap: () {
+                    if (!provider.alebrije!.estado.puedeJugar) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('🎮 Límite alcanzado hoy (${AlebrijeEstado.maxJuegosDia} veces). Vuelve mañana.'),
+                          backgroundColor: Colors.purple,
+                        ),
+                      );
+                      return;
+                    }
                     provider.jugar();
                     final xpBase = 25;
                     final mult = provider.multiplicadorExperienciaTotal;
@@ -1190,8 +1213,19 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                 child: _buildBotonAccion(
                   icon: Icons.medical_services,
                   label: 'Curar',
+                  contador: '${provider.alebrije!.estado.curacionesHoy}/${AlebrijeEstado.maxCuracionesDia}',
                   color: Colors.red,
+                  deshabilitado: !provider.alebrije!.estado.puedeCurar,
                   onTap: () {
+                    if (!provider.alebrije!.estado.puedeCurar) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('💊 Límite alcanzado hoy (${AlebrijeEstado.maxCuracionesDia} veces). Vuelve mañana.'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
                     provider.curar(30);
                     final xpBase = 30;
                     final mult = provider.multiplicadorExperienciaTotal;
@@ -1208,8 +1242,19 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                 child: _buildBotonAccion(
                   icon: Icons.bedtime,
                   label: 'Descansar',
+                  contador: '${provider.alebrije!.estado.descansosHoy}/${AlebrijeEstado.maxDescansosDia}',
                   color: Colors.blue,
+                  deshabilitado: !provider.alebrije!.estado.puedeDescansar,
                   onTap: () {
+                    if (!provider.alebrije!.estado.puedeDescansar) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('😴 Límite alcanzado hoy (${AlebrijeEstado.maxDescansosDia} veces). Vuelve mañana.'),
+                          backgroundColor: Colors.blue,
+                        ),
+                      );
+                      return;
+                    }
                     provider.descansar();
                     final xpBase = 20;
                     final mult = provider.multiplicadorExperienciaTotal;
@@ -1233,6 +1278,8 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
     required String label,
     required Color color,
     required VoidCallback onTap,
+    String? contador,
+    bool deshabilitado = false,
   }) {
     return TweenAnimationBuilder(
       duration: const Duration(milliseconds: 300),
@@ -1270,10 +1317,9 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                 padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [
-                      color,
-                      color.withOpacity(0.7),
-                    ],
+                    colors: deshabilitado
+                        ? [Colors.grey.shade400, Colors.grey.shade500]
+                        : [color, color.withOpacity(0.7)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -1307,6 +1353,24 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                         letterSpacing: 0.5,
                       ),
                     ),
+                    if (contador != null) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          contador,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

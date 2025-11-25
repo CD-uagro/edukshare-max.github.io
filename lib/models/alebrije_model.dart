@@ -561,7 +561,14 @@ class AlebrijeEstado {
   final DateTime ultimaAlimentacion;
   final DateTime ultimaInteraccion;
   final DateTime ultimoCuidado;
-  final int diasConsecutivos; // Racha de interacción diaria
+  final int diasConsecutivos;
+  
+  // Contadores diarios de interacciones con límites
+  final int alimentacionesHoy;
+  final int juegosHoy;
+  final int curacionesHoy;
+  final int descansosHoy;
+  final DateTime ultimaAccionFecha;
 
   AlebrijeEstado({
     required this.hambre,
@@ -572,7 +579,32 @@ class AlebrijeEstado {
     required this.ultimaInteraccion,
     required this.ultimoCuidado,
     this.diasConsecutivos = 0,
-  });
+    this.alimentacionesHoy = 0,
+    this.juegosHoy = 0,
+    this.curacionesHoy = 0,
+    this.descansosHoy = 0,
+    DateTime? ultimaAccionFecha,
+  }) : ultimaAccionFecha = ultimaAccionFecha ?? DateTime.now();
+  
+  // Límites máximos diarios
+  static const int maxAlimentacionesDia = 5;
+  static const int maxJuegosDia = 8;
+  static const int maxCuracionesDia = 3;
+  static const int maxDescansosDia = 5;
+  
+  // Verificar si ha pasado un día desde la última acción
+  bool get esNuevoDia {
+    final ahora = DateTime.now();
+    return ahora.day != ultimaAccionFecha.day ||
+           ahora.month != ultimaAccionFecha.month ||
+           ahora.year != ultimaAccionFecha.year;
+  }
+  
+  // Verificar límites alcanzados
+  bool get puedeAlimentar => esNuevoDia || alimentacionesHoy < maxAlimentacionesDia;
+  bool get puedeJugar => esNuevoDia || juegosHoy < maxJuegosDia;
+  bool get puedeCurar => esNuevoDia || curacionesHoy < maxCuracionesDia;
+  bool get puedeDescansar => esNuevoDia || descansosHoy < maxDescansosDia;
 
   factory AlebrijeEstado.fromJson(Map<String, dynamic> json) {
     return AlebrijeEstado(
@@ -584,6 +616,13 @@ class AlebrijeEstado {
       ultimaInteraccion: DateTime.parse(json['ultimaInteraccion'] ?? DateTime.now().toIso8601String()),
       ultimoCuidado: DateTime.parse(json['ultimoCuidado'] ?? DateTime.now().toIso8601String()),
       diasConsecutivos: json['diasConsecutivos'] ?? 0,
+      alimentacionesHoy: json['alimentacionesHoy'] ?? 0,
+      juegosHoy: json['juegosHoy'] ?? 0,
+      curacionesHoy: json['curacionesHoy'] ?? 0,
+      descansosHoy: json['descansosHoy'] ?? 0,
+      ultimaAccionFecha: json['ultimaAccionFecha'] != null
+          ? DateTime.parse(json['ultimaAccionFecha'])
+          : DateTime.now(),
     );
   }
 
@@ -596,6 +635,11 @@ class AlebrijeEstado {
     'ultimaInteraccion': ultimaInteraccion.toIso8601String(),
     'ultimoCuidado': ultimoCuidado.toIso8601String(),
     'diasConsecutivos': diasConsecutivos,
+    'alimentacionesHoy': alimentacionesHoy,
+    'juegosHoy': juegosHoy,
+    'curacionesHoy': curacionesHoy,
+    'descansosHoy': descansosHoy,
+    'ultimaAccionFecha': ultimaAccionFecha.toIso8601String(),
   };
 
   factory AlebrijeEstado.inicial() {
@@ -609,6 +653,11 @@ class AlebrijeEstado {
       ultimaInteraccion: now,
       ultimoCuidado: now,
       diasConsecutivos: 1,
+      alimentacionesHoy: 0,
+      juegosHoy: 0,
+      curacionesHoy: 0,
+      descansosHoy: 0,
+      ultimaAccionFecha: now,
     );
   }
 
@@ -625,6 +674,11 @@ class AlebrijeEstado {
     final decaimientoSalud = (horasSinCuidar / 12 * 3).round();
     final decaimientoEnergia = (horasSinInteractuar / 4 * 5).round();
 
+    // Resetear contadores si es un nuevo día
+    final nuevosContadores = esNuevoDia
+        ? {'alimentacionesHoy': 0, 'juegosHoy': 0, 'curacionesHoy': 0, 'descansosHoy': 0}
+        : {'alimentacionesHoy': alimentacionesHoy, 'juegosHoy': juegosHoy, 'curacionesHoy': curacionesHoy, 'descansosHoy': descansosHoy};
+    
     return AlebrijeEstado(
       hambre: (hambre - decaimientoHambre).clamp(0, 100),
       felicidad: (felicidad - decaimientoFelicidad).clamp(0, 100),
@@ -634,6 +688,11 @@ class AlebrijeEstado {
       ultimaInteraccion: ultimaInteraccion,
       ultimoCuidado: ultimoCuidado,
       diasConsecutivos: _calcularDiasConsecutivos(now),
+      alimentacionesHoy: nuevosContadores['alimentacionesHoy']!,
+      juegosHoy: nuevosContadores['juegosHoy']!,
+      curacionesHoy: nuevosContadores['curacionesHoy']!,
+      descansosHoy: nuevosContadores['descansosHoy']!,
+      ultimaAccionFecha: esNuevoDia ? now : ultimaAccionFecha,
     );
   }
 
@@ -646,57 +705,106 @@ class AlebrijeEstado {
 
   /// Alimentar al alebrije (usando consultas médicas)
   AlebrijeEstado alimentar(int cantidad) {
+    final ahora = DateTime.now();
+    final resetearContadores = esNuevoDia;
+    
+    // Si ya alcanzó el límite y no es nuevo día, no hacer nada
+    if (!puedeAlimentar && !resetearContadores) {
+      return this;
+    }
+    
     return AlebrijeEstado(
       hambre: (hambre + cantidad).clamp(0, 100),
       felicidad: (felicidad + (cantidad * 0.3).round()).clamp(0, 100),
       salud: salud,
       energia: energia,
-      ultimaAlimentacion: DateTime.now(),
-      ultimaInteraccion: DateTime.now(),
+      ultimaAlimentacion: ahora,
+      ultimaInteraccion: ahora,
       ultimoCuidado: ultimoCuidado,
       diasConsecutivos: diasConsecutivos,
+      alimentacionesHoy: resetearContadores ? 1 : alimentacionesHoy + 1,
+      juegosHoy: resetearContadores ? 0 : juegosHoy,
+      curacionesHoy: resetearContadores ? 0 : curacionesHoy,
+      descansosHoy: resetearContadores ? 0 : descansosHoy,
+      ultimaAccionFecha: ahora,
     );
   }
 
   /// Jugar con el alebrije
   AlebrijeEstado jugar() {
+    final ahora = DateTime.now();
+    final resetearContadores = esNuevoDia;
+    
+    if (!puedeJugar && !resetearContadores) {
+      return this;
+    }
+    
     return AlebrijeEstado(
       hambre: (hambre - 10).clamp(0, 100),
       felicidad: (felicidad + 20).clamp(0, 100),
       salud: (salud + 5).clamp(0, 100),
       energia: (energia - 15).clamp(0, 100),
       ultimaAlimentacion: ultimaAlimentacion,
-      ultimaInteraccion: DateTime.now(),
+      ultimaInteraccion: ahora,
       ultimoCuidado: ultimoCuidado,
       diasConsecutivos: diasConsecutivos,
+      alimentacionesHoy: resetearContadores ? 0 : alimentacionesHoy,
+      juegosHoy: resetearContadores ? 1 : juegosHoy + 1,
+      curacionesHoy: resetearContadores ? 0 : curacionesHoy,
+      descansosHoy: resetearContadores ? 0 : descansosHoy,
+      ultimaAccionFecha: ahora,
     );
   }
 
   /// Curar al alebrije (usando vacunas)
   AlebrijeEstado curar(int cantidad) {
+    final ahora = DateTime.now();
+    final resetearContadores = esNuevoDia;
+    
+    if (!puedeCurar && !resetearContadores) {
+      return this;
+    }
+    
     return AlebrijeEstado(
       hambre: hambre,
       felicidad: (felicidad + (cantidad * 0.2).round()).clamp(0, 100),
       salud: (salud + cantidad).clamp(0, 100),
       energia: (energia + (cantidad * 0.5).round()).clamp(0, 100),
       ultimaAlimentacion: ultimaAlimentacion,
-      ultimaInteraccion: DateTime.now(),
-      ultimoCuidado: DateTime.now(),
+      ultimaInteraccion: ahora,
+      ultimoCuidado: ahora,
       diasConsecutivos: diasConsecutivos,
+      alimentacionesHoy: resetearContadores ? 0 : alimentacionesHoy,
+      juegosHoy: resetearContadores ? 0 : juegosHoy,
+      curacionesHoy: resetearContadores ? 1 : curacionesHoy + 1,
+      descansosHoy: resetearContadores ? 0 : descansosHoy,
+      ultimaAccionFecha: ahora,
     );
   }
 
   /// Descansar (recuperar energía)
   AlebrijeEstado descansar() {
+    final ahora = DateTime.now();
+    final resetearContadores = esNuevoDia;
+    
+    if (!puedeDescansar && !resetearContadores) {
+      return this;
+    }
+    
     return AlebrijeEstado(
       hambre: (hambre - 5).clamp(0, 100),
       felicidad: (felicidad + 10).clamp(0, 100),
       salud: (salud + 5).clamp(0, 100),
       energia: 100,
       ultimaAlimentacion: ultimaAlimentacion,
-      ultimaInteraccion: DateTime.now(),
+      ultimaInteraccion: ahora,
       ultimoCuidado: ultimoCuidado,
       diasConsecutivos: diasConsecutivos,
+      alimentacionesHoy: resetearContadores ? 0 : alimentacionesHoy,
+      juegosHoy: resetearContadores ? 0 : juegosHoy,
+      curacionesHoy: resetearContadores ? 0 : curacionesHoy,
+      descansosHoy: resetearContadores ? 1 : descansosHoy + 1,
+      ultimaAccionFecha: ahora,
     );
   }
 }
