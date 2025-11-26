@@ -50,7 +50,7 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
 
     _animacionSalto = Tween<double>(
       begin: 0.0,
-      end: 100.0, // Altura más realista para un huevo
+      end: 140.0, // Altura generosa para saltar sobre obstáculos de 90px
     ).animate(CurvedAnimation(
       parent: _saltoController,
       curve: Curves.easeOut, // Más natural para un salto
@@ -147,16 +147,18 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
   }
 
   void _verificarColisiones() {
-    const anchoHuevo = 60.0; // Más pequeño que el alebrije
-    const altoHuevo = 80.0;
-    const posicionXHuevo = 80.0; // Posición fija en X
+    const anchoHuevo = 50.0; // Hitbox más pequeña que el visual
+    const posicionXHuevo = 90.0; // Centro del huevo
 
     for (var obstaculo in _obstaculos) {
-      // Colisión más precisa para el huevo
+      // Colisión en X: solo cuando el huevo está sobre el obstáculo
       final colisionX = posicionXHuevo < obstaculo['x'] + obstaculo['ancho'] &&
                        posicionXHuevo + anchoHuevo > obstaculo['x'];
 
-      final colisionY = _posicionAlebrije < obstaculo['alto'] - 10; // Menos tolerancia para el huevo
+      // Colisión en Y: el huevo debe estar CLARAMENTE por encima del obstáculo
+      // Si _posicionAlebrije >= obstaculo['alto'] - 30, está saltando lo suficiente
+      final alturaObstaculo = obstaculo['alto'] as double;
+      final colisionY = _posicionAlebrije < alturaObstaculo - 30; // 30px de margen generoso
 
       if (colisionX && colisionY) {
         _terminarJuego();
