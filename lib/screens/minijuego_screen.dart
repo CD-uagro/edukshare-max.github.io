@@ -50,10 +50,10 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
 
     _animacionSalto = Tween<double>(
       begin: 0.0,
-      end: 80.0, // Altura más realista del salto
+      end: 100.0, // Altura más realista para un huevo
     ).animate(CurvedAnimation(
       parent: _saltoController,
-      curve: Curves.easeOut,
+      curve: Curves.easeOut, // Más natural para un salto
     ));
 
     _animacionSalto.addListener(() {
@@ -147,16 +147,16 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
   }
 
   void _verificarColisiones() {
-    const anchoAlebrije = 80.0; // Ajustado al nuevo tamaño
-    const altoAlebrije = 80.0;
-    const posicionXAlebrije = 80.0; // Posición ajustada
+    const anchoHuevo = 60.0; // Más pequeño que el alebrije
+    const altoHuevo = 80.0;
+    const posicionXHuevo = 80.0; // Posición fija en X
 
     for (var obstaculo in _obstaculos) {
-      // Colisión simple: bounding boxes
-      final colisionX = posicionXAlebrije < obstaculo['x'] + obstaculo['ancho'] &&
-                       posicionXAlebrije + anchoAlebrije > obstaculo['x'];
+      // Colisión más precisa para el huevo
+      final colisionX = posicionXHuevo < obstaculo['x'] + obstaculo['ancho'] &&
+                       posicionXHuevo + anchoHuevo > obstaculo['x'];
 
-      final colisionY = _posicionAlebrije < obstaculo['alto'] - 20; // Más tolerancia en Y
+      final colisionY = _posicionAlebrije < obstaculo['alto'] - 10; // Menos tolerancia para el huevo
 
       if (colisionX && colisionY) {
         _terminarJuego();
@@ -164,7 +164,7 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
       }
 
       // Contar obstáculo evitado
-      if (!obstaculo.containsKey('contado') && obstaculo['x'] + obstaculo['ancho'] < posicionXAlebrije) {
+      if (!obstaculo.containsKey('contado') && obstaculo['x'] + obstaculo['ancho'] < posicionXHuevo) {
         obstaculo['contado'] = true;
         _obstaculosEvitados++;
       }
@@ -239,7 +239,7 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('🎮 ¡Juego Terminado!', textAlign: TextAlign.center),
+        title: const Text('🥚 ¡Juego Terminado!', textAlign: TextAlign.center),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -265,7 +265,7 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
 
               // Otorgar experiencia
               final provider = context.read<AlebrijeProvider>();
-              provider.agregarExperiencia(experienciaGanada, 'Minijuego de salto');
+              provider.agregarExperiencia(experienciaGanada, 'Minijuego del huevo saltarín');
             },
             child: const Text('¡Genial!'),
           ),
@@ -306,7 +306,7 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('🎮 Minijuego: ¡Salta con tu Alebrije!'),
+        title: const Text('🥚 Minijuego: ¡Salta con el Huevo!'),
         backgroundColor: const Color(0xFF8B1538),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -332,7 +332,7 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Text(
-            '🎮 ¡Salta con tu Alebrije!',
+            '🥚 ¡Salta con el Huevo!',
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -361,10 +361,10 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 SizedBox(height: 10),
-                Text('• Toca la pantalla para saltar'),
-                Text('• Evita los obstáculos'),
+                Text('• Toca la pantalla para hacer saltar el huevo'),
+                Text('• Evita los obstáculos del desierto'),
                 Text('• Sobrevive el mayor tiempo posible'),
-                Text('• ¡Gana experiencia al finalizar!'),
+                Text('• ¡Gana experiencia para tu alebrije!'),
               ],
             ),
           ),
@@ -396,7 +396,7 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
                   ),
                 ),
                 child: const Text(
-                  '🎮 ¡JUGAR!',
+                  '🥚 ¡JUGAR!',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -434,28 +434,34 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
             );
           }),
 
-          // 🦅 Alebrije saltando (usando imagen real)
+          // 🥚 Huevo saltando (representando un huevo del alebrije)
           Positioned(
             left: 80,
             bottom: 120 + _posicionAlebrije,
-            child: Consumer<AlebrijeProvider>(
-              builder: (context, provider, child) {
-                if (provider.alebrije == null) {
-                  return const Text('🦅', style: TextStyle(fontSize: 60));
-                }
-                
-                final generator = AlebrijeGenerator(provider.alebrije!);
-                final svgString = generator.generarSVG(width: 80, height: 80);
-                
-                return Transform.scale(
-                  scale: _estaSaltando ? 1.1 : 1.0,
-                  child: SvgPicture.string(
-                    svgString,
-                    width: 80,
-                    height: 80,
+            child: Transform.scale(
+              scale: _estaSaltando ? 1.2 : 1.0,
+              child: Container(
+                width: 60,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(color: Colors.grey.shade300, width: 2),
+                  boxShadow: _estaSaltando ? [
+                    BoxShadow(
+                      color: Colors.yellow.withOpacity(0.5),
+                      blurRadius: 15,
+                      spreadRadius: 5,
+                    )
+                  ] : null,
+                ),
+                child: const Center(
+                  child: Text(
+                    '🥚',
+                    style: TextStyle(fontSize: 40),
                   ),
-                );
-              },
+                ),
+              ),
             ),
           ),
 
