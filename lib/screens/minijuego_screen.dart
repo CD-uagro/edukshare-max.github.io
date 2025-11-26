@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/alebrije_provider.dart';
 import '../models/alebrije_model.dart';
 import '../services/alebrije_generator.dart';
@@ -38,13 +39,17 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
   Duration _tiempoSupervivencia = Duration.zero;
   DateTime? _inicioJuego;
   
-  // 📺 Contador de partidas para publicidad
-  static int _partidasJugadas = 0;
+  // 📺 Contador de partidas para publicidad (persistente)
+  int _partidasJugadas = 0;
   static const String _urlPublicidad = 'https://www.facebook.com/share/p/1JfuqL6oa4/';
+  static const String _keyPartidasJugadas = 'minijuego_partidas_jugadas';
 
   @override
   void initState() {
     super.initState();
+    
+    // Cargar contador de partidas desde almacenamiento persistente
+    _cargarContadorPartidas();
 
     // Animación de salto - más larga y fluida
     _saltoController = AnimationController(
@@ -85,6 +90,30 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
     _saltoController.dispose();
     _timerJuego?.cancel();
     super.dispose();
+  }
+  
+  // 💾 Cargar contador de partidas desde SharedPreferences
+  Future<void> _cargarContadorPartidas() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _partidasJugadas = prefs.getInt(_keyPartidasJugadas) ?? 0;
+      });
+      print('🎮 Partidas jugadas cargadas: $_partidasJugadas');
+    } catch (e) {
+      print('⚠️ Error cargando contador de partidas: $e');
+    }
+  }
+  
+  // 💾 Guardar contador de partidas en SharedPreferences
+  Future<void> _guardarContadorPartidas() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_keyPartidasJugadas, _partidasJugadas);
+      print('💾 Partidas guardadas: $_partidasJugadas');
+    } catch (e) {
+      print('⚠️ Error guardando contador de partidas: $e');
+    }
   }
 
   void _iniciarJuego() {
@@ -246,8 +275,9 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
   }
   
   void _mostrarDialogoResultado(int experienciaGanada) {
-    // Incrementar contador de partidas
+    // Incrementar contador de partidas y guardar persistentemente
     _partidasJugadas++;
+    _guardarContadorPartidas(); // Guardar en SharedPreferences
     final debeVerPublicidad = _partidasJugadas % 2 == 0; // Cada 2 partidas
     
     showDialog(
