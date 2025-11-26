@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:ui' as ui;
+import 'dart:math';
 import '../providers/alebrije_provider.dart';
 import '../providers/session_provider.dart';
 import '../services/alebrije_generator.dart';
@@ -24,11 +25,24 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
   late AnimationController _shakeController;
   late AnimationController _sparkleController;
   
+  // 🎭 Nuevas animaciones autónomas
+  late AnimationController _walkController;
+  late AnimationController _jumpController;
+  late AnimationController _blinkController;
+  late AnimationController _tailController;
+  
   bool _mostrarHistorial = false;
   String _estadoEmocional = 'neutral'; // neutral, feliz, triste, hambriento, jugueton, cansado
   bool _estaSiendoTocado = false;
   int _toquesConsecutivos = 0;
   DateTime? _ultimoToque;
+  
+  // 🚶 Estado de movimiento autónomo
+  double _posicionX = 0.0; // -1.0 a 1.0 (izquierda a derecha)
+  double _posicionY = 0.0; // Para saltos
+  int _direccion = 1; // 1 = derecha, -1 = izquierda
+  bool _estaCaminando = false;
+  bool _estaSaltando = false;
   
   final List<Offset> _particulas = [];
   final List<String> _mensajesAlebrije = [];
@@ -61,6 +75,30 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     );
+    
+    // 🚶 Animación de caminar (movimiento lateral)
+    _walkController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    );
+    
+    // 🦘 Animación de salto
+    _jumpController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    
+    // 👁️ Animación de parpadeo
+    _blinkController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 150),
+    );
+    
+    // 🦎 Animación de cola/alas
+    _tailController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
 
     // ⏱️ Cargar alebrije CON DELAY para evitar 429 rate limiting
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -85,6 +123,8 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
       if (mounted) {
         _evaluarEstadoEmocional();
         _iniciarAnimacionesAutomaticas();
+        _iniciarMovimientosAutonomos(); // 🚶 Iniciar movimiento libre
+        _iniciarParpadeoAleatorio(); // 👁️ Parpadeo natural
         _iniciarSincronizacionPeriodica(); // Sincronizar cada 2 minutos
       }
     });
@@ -96,6 +136,98 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
       if (mounted) {
         _animacionAleatoria();
         _iniciarAnimacionesAutomaticas();
+      }
+    });
+  }
+  
+  // 🚶 Movimiento autónomo del alebrije
+  void _iniciarMovimientosAutonomos() {
+    _cicloMovimiento();
+  }
+  
+  void _cicloMovimiento() {
+    if (!mounted) return;
+    
+    final random = Random();
+    final accion = random.nextInt(100);
+    
+    if (accion < 40) {
+      // 40% - Caminar
+      _caminarHaciaDestino();
+    } else if (accion < 55) {
+      // 15% - Saltar
+      _ejecutarSalto();
+    } else {
+      // 45% - Quedarse quieto
+      Future.delayed(Duration(seconds: random.nextInt(3) + 2), () {
+        _cicloMovimiento();
+      });
+    }
+  }
+  
+  void _caminarHaciaDestino() {
+    if (!mounted || _estaCaminando) return;
+    
+    _estaCaminando = true;
+    final random = Random();
+    
+    // Elegir destino aleatorio (-0.8 a 0.8 para no salirse de pantalla)
+    final destinoX = (random.nextDouble() * 1.6) - 0.8;
+    _direccion = destinoX > _posicionX ? 1 : -1;
+    
+    _walkController.duration = Duration(
+      milliseconds: ((destinoX - _posicionX).abs() * 3000).toInt(),
+    );
+    
+    _walkController.forward(from: 0).then((_) {
+      setState(() {
+        _posicionX = destinoX;
+        _estaCaminando = false;
+      });
+      
+      // Esperar un poco antes del siguiente movimiento
+      Future.delayed(Duration(seconds: random.nextInt(3) + 1), () {
+        _cicloMovimiento();
+      });
+    });
+    
+    // Animar la posición
+    final Tween<double> movimiento = Tween(begin: _posicionX, end: destinoX);
+    _walkController.addListener(() {
+      if (mounted) {
+        setState(() {
+          _posicionX = movimiento.evaluate(_walkController);
+        });
+      }
+    });
+  }
+  
+  void _ejecutarSalto() {
+    if (_estaSaltando) return;
+    
+    _estaSaltando = true;
+    _jumpController.forward(from: 0).then((_) {
+      _estaSaltando = false;
+      // Continuar ciclo después del salto
+      Future.delayed(const Duration(seconds: 1), () {
+        _cicloMovimiento();
+      });
+    });
+  }
+  
+  // 👁️ Parpadeo aleatorio del alebrije
+  void _iniciarParpadeoAleatorio() {
+    if (!mounted) return;
+    
+    final random = Random();
+    final tiempoHastaParpadeo = random.nextInt(5) + 2; // 2-7 segundos
+    
+    Future.delayed(Duration(seconds: tiempoHastaParpadeo), () {
+      if (mounted) {
+        _blinkController.forward(from: 0).then((_) {
+          _blinkController.reverse();
+        });
+        _iniciarParpadeoAleatorio();
       }
     });
   }
@@ -129,6 +261,10 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
     _bounceController.dispose();
     _shakeController.dispose();
     _sparkleController.dispose();
+    _walkController.dispose();
+    _jumpController.dispose();
+    _blinkController.dispose();
+    _tailController.dispose();
     super.dispose();
   }
 
@@ -861,6 +997,10 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
               _breathingController,
               _bounceController,
               _shakeController,
+              _walkController,
+              _jumpController,
+              _blinkController,
+              _tailController,
             ]),
             builder: (context, child) {
               // Respiración suave
@@ -873,39 +1013,58 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
               // Sacudida de atención
               final shakeX = (_shakeController.value - 0.5) * 20;
               
+              // 🚶 Movimiento lateral autónomo (caminar)
+              final walkX = _posicionX * 100; // Convertir -1~1 a píxeles
+              
+              // 🦘 Salto parabólico
+              final jumpProgress = _jumpController.value;
+              final jumpY = -(sin(jumpProgress * pi) * 80); // Parábola de salto
+              
+              // 🔄 Inclinación según dirección de movimiento
+              final tiltAngle = _estaCaminando ? (_direccion * 0.1) : 0.0;
+              
+              // 👁️ Parpadeo (escala vertical de los ojos)
+              final blinkScale = 1.0 - (_blinkController.value * 0.8);
+              
+              // 🌊 Oscilación de cola/alas
+              final tailWag = sin(_tailController.value * 2 * pi) * 0.15;
+              
               // Escala aumentada cuando es tocado
               final touchScale = _estaSiendoTocado ? 1.1 : 1.0;
               
               return Transform.translate(
-                offset: Offset(shakeX, breatheY + bounceY),
-                child: Transform.scale(
-                  scale: breatheScale * touchScale,
-                  child: Container(
-                    width: 300,
-                    height: 300,
-                    decoration: _estaSiendoTocado
-                        ? BoxDecoration(
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.yellow.withOpacity(0.5),
-                                blurRadius: 30,
-                                spreadRadius: 10,
-                              ),
-                            ],
-                          )
-                        : null,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        SvgPicture.string(svgString),
-                        
-                        // Emoji de expresión flotante
-                        Positioned(
-                          top: 20,
-                          child: _buildEmojiExpresion(),
-                        ),
-                      ],
+                offset: Offset(walkX + shakeX, breatheY + bounceY + jumpY),
+                child: Transform.rotate(
+                  angle: tiltAngle,
+                  child: Transform.scale(
+                    scale: breatheScale * touchScale,
+                    child: Container(
+                      width: 300,
+                      height: 300,
+                      decoration: _estaSiendoTocado
+                          ? BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.yellow.withOpacity(0.5),
+                                  blurRadius: 30,
+                                  spreadRadius: 10,
+                                ),
+                              ],
+                            )
+                          : null,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          SvgPicture.string(svgString),
+                          
+                          // Emoji de expresión flotante
+                          Positioned(
+                            top: 20,
+                            child: _buildEmojiExpresion(),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
