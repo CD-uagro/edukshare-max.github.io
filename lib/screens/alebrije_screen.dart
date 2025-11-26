@@ -484,6 +484,29 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
     }
   }
   
+  String _getMensajeLimite(AlebrijeEstado estado, String tipoAccion, int maxDiario, int contadorActual) {
+    final ahora = DateTime.now();
+    final diferencia = ahora.difference(estado.ultimaAccionFecha);
+    
+    // Si ha pasado una hora, el límite debería ser solo el diario
+    if (estado.esNuevaHora) {
+      if (contadorActual >= maxDiario) {
+        return '$tipoAccion: Límite diario alcanzado ($maxDiario veces). Vuelve mañana.';
+      } else {
+        return '¡Ya puedes $tipoAccion de nuevo!';
+      }
+    } else {
+      // No ha pasado una hora, mostrar tiempo restante
+      final minutosFaltantes = 60 - diferencia.inMinutes;
+      if (minutosFaltantes > 0) {
+        return '⏰ Espera ${minutosFaltantes} minutos para $tipoAccion otra vez';
+      } else {
+        // Por si acaso, si los minutos son negativos
+        return '¡Ya puedes $tipoAccion de nuevo!';
+      }
+    }
+  }
+  
   void _manejarToque() {
     final ahora = DateTime.now();
     if (_ultimoToque != null && ahora.difference(_ultimoToque!).inSeconds < 2) {
@@ -1552,7 +1575,12 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                     if (!provider.alebrije!.estado.puedeAlimentar) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('🍽️ Límite alcanzado hoy (${AlebrijeEstado.maxAlimentacionesDia} veces). Vuelve mañana.'),
+                          content: Text(_getMensajeLimite(
+                            provider.alebrije!.estado, 
+                            'alimentar', 
+                            AlebrijeEstado.maxAlimentacionesDia,
+                            provider.alebrije!.estado.alimentacionesHoy
+                          )),
                           backgroundColor: Colors.orange,
                         ),
                       );
@@ -1582,7 +1610,12 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                     if (!provider.alebrije!.estado.puedeJugar) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('🎮 Límite alcanzado hoy (${AlebrijeEstado.maxJuegosDia} veces). Vuelve mañana.'),
+                          content: Text(_getMensajeLimite(
+                            provider.alebrije!.estado, 
+                            'jugar', 
+                            AlebrijeEstado.maxJuegosDia,
+                            provider.alebrije!.estado.juegosHoy
+                          )),
                           backgroundColor: Colors.purple,
                         ),
                       );
@@ -1615,7 +1648,12 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                     if (!provider.alebrije!.estado.puedeCurar) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('💊 Límite alcanzado hoy (${AlebrijeEstado.maxCuracionesDia} veces). Vuelve mañana.'),
+                          content: Text(_getMensajeLimite(
+                            provider.alebrije!.estado, 
+                            'curar', 
+                            AlebrijeEstado.maxCuracionesDia,
+                            provider.alebrije!.estado.curacionesHoy
+                          )),
                           backgroundColor: Colors.red,
                         ),
                       );
@@ -1644,7 +1682,12 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                     if (!provider.alebrije!.estado.puedeDescansar) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('😴 Límite alcanzado hoy (${AlebrijeEstado.maxDescansosDia} veces). Vuelve mañana.'),
+                          content: Text(_getMensajeLimite(
+                            provider.alebrije!.estado, 
+                            'descansar', 
+                            AlebrijeEstado.maxDescansosDia,
+                            provider.alebrije!.estado.descansosHoy
+                          )),
                           backgroundColor: Colors.blue,
                         ),
                       );
