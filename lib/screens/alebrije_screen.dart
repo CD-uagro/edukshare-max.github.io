@@ -109,10 +109,10 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
       final sessionProvider = context.read<SessionProvider>();
       final matricula = sessionProvider.carnet?.matricula ?? '15662';
       
-      // Timeout de 12 segundos: si Azure no responde, mostrar selector de todas formas
-      Future.delayed(const Duration(seconds: 12), () {
+      // Timeout de respaldo: si todo tarda demasiado (25s), mostrar interfaz
+      Future.delayed(const Duration(seconds: 25), () {
         if (mounted && !_verificacionAzureCompleta) {
-          print('⏱️ Timeout: mostrando interfaz después de 12 segundos');
+          print('⏱️ Timeout de respaldo: mostrando interfaz después de 25 segundos');
           setState(() => _verificacionAzureCompleta = true);
         }
       });
@@ -130,7 +130,12 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
         // Después de inicializar, verificar resultado
         if (mounted) {
           setState(() => _verificacionAzureCompleta = true);
-          
+
+          print('🔍 DEBUG: Verificación Azure completada');
+          print('   - alebrijeProvider.alebrije: ${alebrijeProvider.alebrije != null ? "ENCONTRADO" : "NULL"}');
+          print('   - alebrijeProvider.isLoading: ${alebrijeProvider.isLoading}');
+          print('   - alebrijeProvider.error: ${alebrijeProvider.error}');
+
           if (alebrijeProvider.alebrije != null) {
             print('✅ Alebrije encontrado y cargado desde Azure');
             _evaluarEstadoEmocional();
@@ -478,47 +483,14 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
   @override
   Widget build(BuildContext context) {
     final alebrijeProvider = context.watch<AlebrijeProvider>();
-    
+
     // Actualizar estado emocional cuando cambie el estado del alebrije
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _evaluarEstadoEmocional();
     });
 
-    if (alebrijeProvider.isLoading) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Mi Alebrije'),
-          backgroundColor: const Color(0xFF8B1538),
-        ),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B1538)),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                '🔍 Cargando tu alebrije desde Azure...',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[700],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Esto puede tomar unos segundos',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[500],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+    // DEBUG: Mostrar estado actual
+    print('🔍 BUILD: _verificacionAzureCompleta=${_verificacionAzureCompleta}, alebrije=${alebrijeProvider.alebrije != null ? "EXISTS" : "NULL"}, isLoading=${alebrijeProvider.isLoading}, error=${alebrijeProvider.error}');
 
     if (alebrijeProvider.error != null) {
       return Scaffold(
@@ -536,7 +508,7 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
     }
 
     final alebrije = alebrijeProvider.alebrije;
-    
+
     // Si aún no se completó la verificación de Azure, mostrar pantalla de loading
     if (!_verificacionAzureCompleta) {
       return Scaffold(
@@ -575,12 +547,14 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
         ),
       );
     }
-    
+
     // Si no hay alebrije después de verificar Azure, mostrar selector de especie
     if (alebrije == null) {
+      print('🎯 MOSTRANDO SELECTOR: No hay alebrije después de verificación');
       return _buildSeleccionEspecie(context);
     }
 
+    print('🎯 MOSTRANDO ALEBRIJE: ${alebrije.nombre}');
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
