@@ -41,8 +41,10 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
   
   // 📺 Contador de partidas para publicidad (persistente)
   int _partidasJugadas = 0;
+  bool _publicidadPendiente = false; // Si debe ver publicidad antes de jugar
   static const String _urlPublicidad = 'https://www.facebook.com/share/p/1JfuqL6oa4/';
   static const String _keyPartidasJugadas = 'minijuego_partidas_jugadas';
+  static const String _keyPublicidadPendiente = 'minijuego_publicidad_pendiente';
 
   @override
   void initState() {
@@ -98,8 +100,9 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
       final prefs = await SharedPreferences.getInstance();
       setState(() {
         _partidasJugadas = prefs.getInt(_keyPartidasJugadas) ?? 0;
+        _publicidadPendiente = prefs.getBool(_keyPublicidadPendiente) ?? false;
       });
-      print('🎮 Partidas jugadas cargadas: $_partidasJugadas');
+      print('🎮 Partidas jugadas cargadas: $_partidasJugadas, Publicidad pendiente: $_publicidadPendiente');
     } catch (e) {
       print('⚠️ Error cargando contador de partidas: $e');
     }
@@ -110,10 +113,92 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt(_keyPartidasJugadas, _partidasJugadas);
-      print('💾 Partidas guardadas: $_partidasJugadas');
+      await prefs.setBool(_keyPublicidadPendiente, _publicidadPendiente);
+      print('💾 Partidas guardadas: $_partidasJugadas, Publicidad pendiente: $_publicidadPendiente');
     } catch (e) {
       print('⚠️ Error guardando contador de partidas: $e');
     }
+  }
+  
+  // 📺 Verificar y mostrar publicidad si es necesario ANTES de jugar
+  void _verificarPublicidadAntesDeJugar() {
+    if (_publicidadPendiente) {
+      // Debe ver publicidad antes de jugar
+      _mostrarDialogoPublicidadObligatoria();
+    } else {
+      // Puede jugar directamente
+      _iniciarJuego();
+    }
+  }
+  
+  void _mostrarDialogoPublicidadObligatoria() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('🎬 ¡Mira nuestra publicidad!', textAlign: TextAlign.center),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: const Column(
+                children: [
+                  Icon(Icons.campaign, color: Colors.blue, size: 50),
+                  SizedBox(height: 12),
+                  Text(
+                    'Para seguir jugando, ve nuestra publicidad',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    '¡Apóyanos viendo nuestro contenido!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton.icon(
+            onPressed: () {
+              // Abrir publicidad
+              html.window.open(_urlPublicidad, '_blank');
+              // Marcar publicidad como vista
+              setState(() {
+                _publicidadPendiente = false;
+              });
+              _guardarContadorPartidas();
+              Navigator.of(context).pop();
+              // Ahora sí puede jugar
+              _iniciarJuego();
+            },
+            icon: const Icon(Icons.play_circle),
+            label: const Text('Ver publicidad y jugar'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pop(); // Salir del minijuego
+            },
+            child: const Text('Salir'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _iniciarJuego() {
@@ -275,10 +360,15 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
   }
   
   void _mostrarDialogoResultado(int experienciaGanada) {
-    // Incrementar contador de partidas y guardar persistentemente
+    // Incrementar contador de partidas
     _partidasJugadas++;
-    _guardarContadorPartidas(); // Guardar en SharedPreferences
     final debeVerPublicidad = _partidasJugadas % 2 == 0; // Cada 2 partidas
+    
+    // Si debe ver publicidad, marcarla como pendiente ANTES de guardar
+    if (debeVerPublicidad) {
+      _publicidadPendiente = true;
+    }
+    _guardarContadorPartidas(); // Guardar en SharedPreferences
     
     showDialog(
       context: context,
@@ -336,6 +426,11 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
               onPressed: () {
                 // Abrir publicidad en nueva pestaña
                 html.window.open(_urlPublicidad, '_blank');
+                // Marcar publicidad como vista
+                setState(() {
+                  _publicidadPendiente = false;
+                });
+                _guardarContadorPartidas();
                 Navigator.of(context).pop();
                 // Otorgar experiencia
                 final provider = context.read<AlebrijeProvider>();
@@ -504,7 +599,7 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
               ),
               const SizedBox(width: 20),
               ElevatedButton(
-                onPressed: _iniciarJuego,
+                onPressed: _verificarPublicidadAntesDeJugar,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF8B1538),
                   padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
