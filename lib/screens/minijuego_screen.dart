@@ -37,6 +37,10 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
   int _obstaculosEvitados = 0;
   Duration _tiempoSupervivencia = Duration.zero;
   DateTime? _inicioJuego;
+  
+  // 📺 Contador de partidas para publicidad
+  static int _partidasJugadas = 0;
+  static const String _urlPublicidad = 'https://www.facebook.com/share/p/1K43q5RCL9/';
 
   @override
   void initState() {
@@ -242,6 +246,10 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
   }
   
   void _mostrarDialogoResultado(int experienciaGanada) {
+    // Incrementar contador de partidas
+    _partidasJugadas++;
+    final debeVerPublicidad = _partidasJugadas % 2 == 0; // Cada 2 partidas
+    
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -262,23 +270,95 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
                 color: Colors.green,
               ),
             ),
+            if (debeVerPublicidad) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: const Column(
+                  children: [
+                    Icon(Icons.campaign, color: Colors.blue, size: 30),
+                    SizedBox(height: 8),
+                    Text(
+                      '🎬 ¡Mira nuestra publicidad para seguir jugando!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Apóyanos viendo nuestro contenido',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
         actions: [
+          if (debeVerPublicidad)
+            ElevatedButton.icon(
+              onPressed: () {
+                // Abrir publicidad en nueva pestaña
+                html.window.open(_urlPublicidad, '_blank');
+                Navigator.of(context).pop();
+                // Otorgar experiencia
+                final provider = context.read<AlebrijeProvider>();
+                provider.agregarExperiencia(experienciaGanada, 'Minijuego del huevo saltarín');
+                // Reiniciar juego después de ver publicidad
+                _reiniciarParaJugarDeNuevo();
+              },
+              icon: const Icon(Icons.play_circle),
+              label: const Text('Ver publicidad y jugar de nuevo'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+            )
+          else
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Otorgar experiencia
+                final provider = context.read<AlebrijeProvider>();
+                provider.agregarExperiencia(experienciaGanada, 'Minijuego del huevo saltarín');
+                // Reiniciar para jugar de nuevo
+                _reiniciarParaJugarDeNuevo();
+              },
+              child: const Text('🎮 Jugar de nuevo'),
+            ),
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
               Navigator.of(context).pop(); // Volver a pantalla principal
-
               // Otorgar experiencia
               final provider = context.read<AlebrijeProvider>();
               provider.agregarExperiencia(experienciaGanada, 'Minijuego del huevo saltarín');
             },
-            child: const Text('¡Genial!'),
+            child: const Text('Salir'),
           ),
         ],
       ),
     );
+  }
+  
+  void _reiniciarParaJugarDeNuevo() {
+    setState(() {
+      _juegoIniciado = false;
+      _juegoTerminado = false;
+      _puntuacion = 0;
+      _obstaculosEvitados = 0;
+      _tiempoSupervivencia = Duration.zero;
+      _obstaculos.clear();
+      _velocidadJuego = 5.0;
+      _posicionAlebrije = 0.0;
+      _estaSaltando = false;
+    });
   }
 
   Widget _buildObstaculo(Map<String, dynamic> obstaculo) {
