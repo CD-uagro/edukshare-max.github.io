@@ -118,12 +118,14 @@ class AlebrijeProvider extends ChangeNotifier {
       // PRIORIDAD 2: No existe en Cosmos DB - usuario nuevo debe elegir especie
       // Si especieBase es null, el usuario debe elegir primero
       if (especieBase == null) {
-        print('🎨 ===== MOSTRANDO SELECCIÓN DE ESPECIE =====');
+        print('🎨 ===== NO SE ENCONTRÓ ALEBRIJE EN AZURE =====');
         print('   Razón: alebrijeBackend es NULL');
         print('   Matrícula consultada: $matricula');
-        print('   ⚠️ PROBLEMA: El alebrije debería existir en Azure pero no se encontró');
-        print('   Verifica que el backend esté guardando correctamente en Cosmos DB');
+        print('   Usuario nuevo debe seleccionar especie');
         _alebrije = null; // Mantener null para mostrar diálogo de selección
+        // ⚠️ MANTENER isLoading = true brevemente para evitar parpadeo de UI
+        // Se apagará después del await de 100ms
+        await Future.delayed(const Duration(milliseconds: 100));
         _isLoading = false;
         notifyListeners();
         return;

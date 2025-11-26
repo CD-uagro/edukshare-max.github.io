@@ -270,8 +270,24 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
       }
     });
     
-    // Dar experiencia por interacción
-    context.read<AlebrijeProvider>().jugar();
+    // Dar experiencia por interacción SOLO si tiene interacciones disponibles
+    final provider = context.read<AlebrijeProvider>();
+    final alebrije = provider.alebrije;
+    if (alebrije != null && alebrije.estado.puedeJugar) {
+      provider.jugar();
+      // Mostrar feedback de XP ganado
+      final xpBase = 25;
+      final mult = provider.multiplicadorExperienciaTotal;
+      final xpTotal = (xpBase * mult).round();
+      _mostrarXPGanado(
+        xpTotal, 
+        bonus: mult > 1.0 ? 'x${mult.toStringAsFixed(1)}' : null
+      );
+    } else if (alebrije != null && !alebrije.estado.puedeJugar) {
+      // Mostrar mensaje de límite alcanzado pero seguir respondiendo
+      print('⚠️ Límite de interacciones diarias alcanzado (${alebrije.estado.juegosHoy}/${AlebrijeEstado.maxJuegosDia})');
+      // El alebrije sigue respondiendo con mensajes pero no gana XP
+    }
   }
 
   @override
@@ -284,8 +300,38 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
     });
 
     if (alebrijeProvider.isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Mi Alebrije'),
+          backgroundColor: const Color(0xFF8B1538),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B1538)),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                '🔍 Cargando tu alebrije desde Azure...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Esto puede tomar unos segundos',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[500],
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -797,7 +843,18 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
             _mostrarMensajeAlebrije('¡Me haces sentir especial! 💖');
             _crearParticulasCorazon(const Offset(150, 150));
             _sparkleController.forward(from: 0);
-            context.read<AlebrijeProvider>().jugar();
+            // Solo dar XP si tiene interacciones disponibles
+            final provider = context.read<AlebrijeProvider>();
+            if (provider.alebrije != null && provider.alebrije!.estado.puedeJugar) {
+              provider.jugar();
+              final xpBase = 25;
+              final mult = provider.multiplicadorExperienciaTotal;
+              final xpTotal = (xpBase * mult).round();
+              _mostrarXPGanado(
+                xpTotal, 
+                bonus: mult > 1.0 ? 'x${mult.toStringAsFixed(1)}' : null
+              );
+            }
           },
           child: AnimatedBuilder(
             animation: Listenable.merge([
