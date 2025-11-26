@@ -8,6 +8,7 @@ import 'dart:math';
 import '../providers/alebrije_provider.dart';
 import '../providers/session_provider.dart';
 import '../services/alebrije_generator.dart';
+import 'minijuego_screen.dart';
 import '../models/capsula_poder_model.dart';
 import '../models/alebrije_model.dart';
 
@@ -1658,6 +1659,33 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                       bonus: mult > 1.0 ? 'x${mult.toStringAsFixed(1)}' : null
                     );
                   },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // 🎮 Nueva fila con botón del minijuego
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => MinijuegoScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.games),
+                  label: const Text('🎮 Minijuego'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
               ),
             ],

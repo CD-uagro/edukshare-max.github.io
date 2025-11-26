@@ -10,6 +10,7 @@ import 'package:carnet_digital_uagro/screens/register_screen.dart';
 import 'package:carnet_digital_uagro/screens/carnet_selector_screen.dart';
 import 'package:carnet_digital_uagro/screens/vacunas_screen.dart';
 import 'package:carnet_digital_uagro/screens/alebrije_screen.dart';
+import 'package:carnet_digital_uagro/screens/minijuego_screen.dart';
 import 'package:carnet_digital_uagro/theme/uagro_theme.dart';
 
 void main() {
