@@ -47187,28 +47187,36 @@ case 6:case 1:return A.G(q,r)
 case 2:return A.F(o.at(-1),r)}})
 return A.H($async$jA,r)},
 p7(a){return this.apt(a)},
-apt(a){var s=0,r=A.I(t.H),q,p=this,o
+apt(a){var s=0,r=A.I(t.H),q,p=this,o,n
 var $async$p7=A.D(function(b,c){if(b===1)return A.F(c,r)
-while(true)switch(s){case 0:o=p.a
-if(o==null){s=1
-break}p.a=A.l4(o,null,o.e.p7(a),null,null,null,null,new A.aU(Date.now(),0,!1))
-s=3
+while(true)switch(s){case 0:n=p.a
+if(n==null){s=1
+break}o=n.e
+n=A.l4(n,null,o.p7(a),null,null,null,null,new A.aU(Date.now(),0,!1))
+p.a=n
+s=n.e.x>o.x?3:4
+break
+case 3:s=5
 return A.v(p.m2(15,"Alimentar"),$async$p7)
-case 3:s=4
+case 5:case 4:s=6
 return A.v(p.hx(),$async$p7)
-case 4:p.M()
+case 6:p.M()
 case 1:return A.G(q,r)}})
 return A.H($async$p7,r)},
-mw(){var s=0,r=A.I(t.H),q,p=this,o
+mw(){var s=0,r=A.I(t.H),q,p=this,o,n
 var $async$mw=A.D(function(a,b){if(a===1)return A.F(b,r)
-while(true)switch(s){case 0:o=p.a
-if(o==null){s=1
-break}p.a=A.l4(o,null,o.e.mw(),null,null,null,null,new A.aU(Date.now(),0,!1))
-s=3
+while(true)switch(s){case 0:n=p.a
+if(n==null){s=1
+break}o=n.e
+n=A.l4(n,null,o.mw(),null,null,null,null,new A.aU(Date.now(),0,!1))
+p.a=n
+s=n.e.y>o.y?3:4
+break
+case 3:s=5
 return A.v(p.m2(25,"Jugar"),$async$mw)
-case 3:s=4
+case 5:case 4:s=6
 return A.v(p.hx(),$async$mw)
-case 4:p.M()
+case 6:p.M()
 case 1:return A.G(q,r)}})
 return A.H($async$mw,r)},
 DN(a){return this.azx(a)},
@@ -47224,28 +47232,36 @@ case 3:p.M()
 case 1:return A.G(q,r)}})
 return A.H($async$DN,r)},
 po(a){return this.ase(a)},
-ase(a){var s=0,r=A.I(t.H),q,p=this,o
+ase(a){var s=0,r=A.I(t.H),q,p=this,o,n
 var $async$po=A.D(function(b,c){if(b===1)return A.F(c,r)
-while(true)switch(s){case 0:o=p.a
-if(o==null){s=1
-break}p.a=A.l4(o,null,o.e.po(a),null,null,null,null,new A.aU(Date.now(),0,!1))
-s=3
+while(true)switch(s){case 0:n=p.a
+if(n==null){s=1
+break}o=n.e
+n=A.l4(n,null,o.po(a),null,null,null,null,new A.aU(Date.now(),0,!1))
+p.a=n
+s=n.e.z>o.z?3:4
+break
+case 3:s=5
 return A.v(p.m2(30,"Curar"),$async$po)
-case 3:s=4
+case 5:case 4:s=6
 return A.v(p.hx(),$async$po)
-case 4:p.M()
+case 6:p.M()
 case 1:return A.G(q,r)}})
 return A.H($async$po,r)},
-pq(){var s=0,r=A.I(t.H),q,p=this,o
+pq(){var s=0,r=A.I(t.H),q,p=this,o,n
 var $async$pq=A.D(function(a,b){if(a===1)return A.F(b,r)
-while(true)switch(s){case 0:o=p.a
-if(o==null){s=1
-break}p.a=A.l4(o,null,o.e.pq(),null,null,null,null,new A.aU(Date.now(),0,!1))
-s=3
+while(true)switch(s){case 0:n=p.a
+if(n==null){s=1
+break}o=n.e
+n=A.l4(n,null,o.pq(),null,null,null,null,new A.aU(Date.now(),0,!1))
+p.a=n
+s=n.e.Q>o.Q?3:4
+break
+case 3:s=5
 return A.v(p.m2(20,"Descansar"),$async$pq)
-case 3:s=4
+case 5:case 4:s=6
 return A.v(p.hx(),$async$pq)
-case 4:p.M()
+case 6:p.M()
 case 1:return A.G(q,r)}})
 return A.H($async$pq,r)},
 m2(a,b){return this.aps(a,b)},

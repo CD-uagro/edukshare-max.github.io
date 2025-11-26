@@ -161,17 +161,20 @@ class AlebrijeProvider extends ChangeNotifier {
     }
   }
 
-  /// Alimentar al alebrije
+  /// Alimentar al alebrije (se activa con consultas médicas)
   Future<void> alimentar(int cantidad) async {
     if (_alebrije == null) return;
 
+    final estadoAnterior = _alebrije!.estado.alimentacionesHoy;
     _alebrije = _alebrije!.copyWith(
       estado: _alebrije!.estado.alimentar(cantidad),
       updatedAt: DateTime.now(),
     );
 
-    // Ganar experiencia por interacción (aumentado para progresión más rápida)
-    await agregarExperiencia(15, 'Alimentar');
+    // Solo dar XP si la acción realmente se ejecutó (el contador aumentó)
+    if (_alebrije!.estado.alimentacionesHoy > estadoAnterior) {
+      await agregarExperiencia(15, 'Alimentar');
+    }
     
     await _guardarEstado();
     notifyListeners();
@@ -181,13 +184,16 @@ class AlebrijeProvider extends ChangeNotifier {
   Future<void> jugar() async {
     if (_alebrije == null) return;
 
+    final estadoAnterior = _alebrije!.estado.juegosHoy;
     _alebrije = _alebrije!.copyWith(
       estado: _alebrije!.estado.jugar(),
       updatedAt: DateTime.now(),
     );
 
-    // Ganar experiencia por interacción (aumentado para progresión más rápida)
-    await agregarExperiencia(25, 'Jugar');
+    // Solo dar XP si la acción realmente se ejecutó (el contador aumentó)
+    if (_alebrije!.estado.juegosHoy > estadoAnterior) {
+      await agregarExperiencia(25, 'Jugar');
+    }
     
     await _guardarEstado();
     notifyListeners();
@@ -211,13 +217,16 @@ class AlebrijeProvider extends ChangeNotifier {
   Future<void> curar(int cantidad) async {
     if (_alebrije == null) return;
 
+    final estadoAnterior = _alebrije!.estado.curacionesHoy;
     _alebrije = _alebrije!.copyWith(
       estado: _alebrije!.estado.curar(cantidad),
       updatedAt: DateTime.now(),
     );
 
-    // Ganar experiencia por interacción (aumentado para progresión más rápida)
-    await agregarExperiencia(30, 'Curar');
+    // Solo dar XP si la acción realmente se ejecutó (el contador aumentó)
+    if (_alebrije!.estado.curacionesHoy > estadoAnterior) {
+      await agregarExperiencia(30, 'Curar');
+    }
     
     await _guardarEstado();
     notifyListeners();
@@ -227,13 +236,16 @@ class AlebrijeProvider extends ChangeNotifier {
   Future<void> descansar() async {
     if (_alebrije == null) return;
 
+    final estadoAnterior = _alebrije!.estado.descansosHoy;
     _alebrije = _alebrije!.copyWith(
       estado: _alebrije!.estado.descansar(),
       updatedAt: DateTime.now(),
     );
 
-    // Ganar experiencia por interacción (aumentado para progresión más rápida)
-    await agregarExperiencia(20, 'Descansar');
+    // Solo dar XP si la acción realmente se ejecutó (el contador aumentó)
+    if (_alebrije!.estado.descansosHoy > estadoAnterior) {
+      await agregarExperiencia(20, 'Descansar');
+    }
     
     await _guardarEstado();
     notifyListeners();
