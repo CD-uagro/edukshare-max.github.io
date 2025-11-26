@@ -43,6 +43,7 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
   int _direccion = 1; // 1 = derecha, -1 = izquierda
   bool _estaCaminando = false;
   bool _estaSaltando = false;
+  bool _verificacionAzureCompleta = false; // Control para mostrar selector después de verificar Azure
   
   final List<Offset> _particulas = [];
   final List<String> _mensajesAlebrije = [];
@@ -102,30 +103,59 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
 
     // ⏱️ Cargar alebrije CON DELAY para evitar 429 rate limiting
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Esperar 8 segundos para dar tiempo a que terminen las llamadas de promociones
-      await Future.delayed(const Duration(seconds: 8));
-      
       if (!mounted) return;
       
       final alebrijeProvider = context.read<AlebrijeProvider>();
       final sessionProvider = context.read<SessionProvider>();
       final matricula = sessionProvider.carnet?.matricula ?? '15662';
       
-      // Solo inicializar si no hay alebrije cargado
-      if (alebrijeProvider.alebrije == null) {
+      // Timeout de 12 segundos: si Azure no responde, mostrar selector de todas formas
+      Future.delayed(const Duration(seconds: 12), () {
+        if (mounted && !_verificacionAzureCompleta) {
+          print('⏱️ Timeout: mostrando interfaz después de 12 segundos');
+          setState(() => _verificacionAzureCompleta = true);
+        }
+      });
+      
+      // Esperar 8 segundos para dar tiempo a que terminen las llamadas de promociones
+      await Future.delayed(const Duration(seconds: 8));
+      
+      if (!mounted) return;
+      
+      // Intentar cargar desde Azure
+      if (alebrijeProvider.alebrije == null && !alebrijeProvider.isLoading) {
+        print('🔍 Iniciando carga de alebrije desde Azure...');
         await alebrijeProvider.inicializarAlebrije(matricula);
-      } else {
+        
+        // Después de inicializar, verificar resultado
+        if (mounted) {
+          setState(() => _verificacionAzureCompleta = true);
+          
+          if (alebrijeProvider.alebrije != null) {
+            print('✅ Alebrije encontrado y cargado desde Azure');
+            _evaluarEstadoEmocional();
+            _iniciarAnimacionesAutomaticas();
+            _iniciarMovimientosAutonomos();
+            _iniciarParpadeoAleatorio();
+            _iniciarSincronizacionPeriodica();
+          } else {
+            print('ℹ️ No se encontró alebrije en Azure - mostrando selector de especie');
+            // El widget mostrará automáticamente la pantalla de selección
+          }
+        }
+      } else if (alebrijeProvider.alebrije != null) {
         // 🔄 FORZAR sincronización desde Azure al abrir la pantalla
         await alebrijeProvider.forzarSincronizacionDesdeAzure();
         await alebrijeProvider.actualizarEstado();
-      }
-      
-      if (mounted && alebrijeProvider.alebrije != null) {
-        _evaluarEstadoEmocional();
-        _iniciarAnimacionesAutomaticas();
-        _iniciarMovimientosAutonomos(); // 🚶 Iniciar movimiento libre
-        _iniciarParpadeoAleatorio(); // 👁️ Parpadeo natural
-        _iniciarSincronizacionPeriodica(); // Sincronizar cada 2 minutos
+        
+        if (mounted) {
+          setState(() => _verificacionAzureCompleta = true);
+          _evaluarEstadoEmocional();
+          _iniciarAnimacionesAutomaticas();
+          _iniciarMovimientosAutonomos();
+          _iniciarParpadeoAleatorio();
+          _iniciarSincronizacionPeriodica();
+        }
       }
     });
   }
@@ -506,6 +536,47 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
     }
 
     final alebrije = alebrijeProvider.alebrije;
+    
+    // Si aún no se completó la verificación de Azure, mostrar pantalla de loading
+    if (!_verificacionAzureCompleta) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Mi Alebrije Guardián'),
+          backgroundColor: const Color(0xFF8B1538),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8B1538)),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                '🔍 Buscando tu alebrije en Azure...',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.grey[700],
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Verificando tu guardián en la nube',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[500],
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    // Si no hay alebrije después de verificar Azure, mostrar selector de especie
     if (alebrije == null) {
       return _buildSeleccionEspecie(context);
     }
