@@ -123,9 +123,6 @@ class AlebrijeProvider extends ChangeNotifier {
         print('   Matrícula consultada: $matricula');
         print('   Usuario nuevo debe seleccionar especie');
         _alebrije = null; // Mantener null para mostrar diálogo de selección
-        // ⚠️ MANTENER isLoading = true brevemente para evitar parpadeo de UI
-        // Se apagará después del await de 100ms
-        await Future.delayed(const Duration(milliseconds: 100));
         _isLoading = false;
         notifyListeners();
         return;

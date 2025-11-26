@@ -120,7 +120,7 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
         await alebrijeProvider.actualizarEstado();
       }
       
-      if (mounted) {
+      if (mounted && alebrijeProvider.alebrije != null) {
         _evaluarEstadoEmocional();
         _iniciarAnimacionesAutomaticas();
         _iniciarMovimientosAutonomos(); // 🚶 Iniciar movimiento libre
@@ -147,6 +147,16 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
   
   void _cicloMovimiento() {
     if (!mounted) return;
+    
+    // Verificar que el alebrije existe antes de animar
+    final provider = context.read<AlebrijeProvider>();
+    if (provider.alebrije == null) {
+      // Reintentar en 2 segundos si aún no carga
+      Future.delayed(const Duration(seconds: 2), () {
+        _cicloMovimiento();
+      });
+      return;
+    }
     
     final random = Random();
     final accion = random.nextInt(100);
@@ -218,6 +228,15 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
   // 👁️ Parpadeo aleatorio del alebrije
   void _iniciarParpadeoAleatorio() {
     if (!mounted) return;
+    
+    // Verificar que existe el alebrije
+    final provider = context.read<AlebrijeProvider>();
+    if (provider.alebrije == null) {
+      Future.delayed(const Duration(seconds: 2), () {
+        _iniciarParpadeoAleatorio();
+      });
+      return;
+    }
     
     final random = Random();
     final tiempoHastaParpadeo = random.nextInt(5) + 2; // 2-7 segundos
