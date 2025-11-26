@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../providers/alebrije_provider.dart';
 import '../models/alebrije_model.dart';
+import '../services/alebrije_generator.dart';
 import 'dart:async';
 import 'dart:math';
+import 'dart:convert';
+import 'dart:html' as html;
 
 class MinijuegoScreen extends StatefulWidget {
   const MinijuegoScreen({super.key});
@@ -46,7 +50,7 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
 
     _animacionSalto = Tween<double>(
       begin: 0.0,
-      end: 120.0, // Altura máxima del salto
+      end: 80.0, // Altura más realista del salto
     ).animate(CurvedAnimation(
       parent: _saltoController,
       curve: Curves.easeOut,
@@ -112,8 +116,8 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
       _obstaculos.removeWhere((obs) => obs['x'] < -50);
 
       // Generar nuevos obstáculos
-      if (_obstaculos.isEmpty || _obstaculos.last['x'] < MediaQuery.of(context).size.width - 300) {
-        if (Random().nextDouble() < 0.02) { // 2% de probabilidad por frame
+      if (_obstaculos.isEmpty || _obstaculos.last['x'] < MediaQuery.of(context).size.width - 250) {
+        if (Random().nextDouble() < 0.04) { // 4% de probabilidad por frame (más fluido)
           _generarObstaculo();
         }
       }
@@ -137,22 +141,22 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
       'x': MediaQuery.of(context).size.width,
       'y': 0.0,
       'tipo': tipo,
-      'ancho': 40.0,
-      'alto': tipo == 'cactus' ? 80.0 : tipo == 'roca' ? 60.0 : 40.0,
+      'ancho': 50.0, // Más ancho
+      'alto': tipo == 'cactus' ? 70.0 : tipo == 'roca' ? 50.0 : 35.0, // Más proporcional
     });
   }
 
   void _verificarColisiones() {
-    const anchoAlebrije = 60.0;
+    const anchoAlebrije = 80.0; // Ajustado al nuevo tamaño
     const altoAlebrije = 80.0;
-    const posicionXAlebrije = 100.0; // Posición fija en X
+    const posicionXAlebrije = 80.0; // Posición ajustada
 
     for (var obstaculo in _obstaculos) {
       // Colisión simple: bounding boxes
       final colisionX = posicionXAlebrije < obstaculo['x'] + obstaculo['ancho'] &&
                        posicionXAlebrije + anchoAlebrije > obstaculo['x'];
 
-      final colisionY = _posicionAlebrije < obstaculo['alto'];
+      final colisionY = _posicionAlebrije < obstaculo['alto'] - 20; // Más tolerancia en Y
 
       if (colisionX && colisionY) {
         _terminarJuego();
@@ -189,6 +193,47 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
     _mostrarDialogoResultado(experienciaGanada);
   }
 
+  void _descargarImagenAlebrije() {
+    final provider = context.read<AlebrijeProvider>();
+    if (provider.alebrije == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('❌ No se pudo acceder al alebrije')),
+      );
+      return;
+    }
+
+    try {
+      final alebrije = provider.alebrije!;
+      final generator = AlebrijeGenerator(alebrije);
+      final svgString = generator.generarSVG(width: 800, height: 800);
+      
+      // Crear blob SVG
+      final bytes = utf8.encode(svgString);
+      final blob = html.Blob([bytes], 'image/svg+xml');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      
+      // Nombre del archivo con timestamp
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final filename = '${alebrije.nombre.replaceAll(' ', '_')}_Minijuego_$timestamp.svg';
+      
+      // Crear y descargar
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', filename)
+        ..click();
+      
+      // Limpiar URL
+      html.Url.revokeObjectUrl(url);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('✅ Imagen descargada: $filename')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Error al descargar: $e')),
+      );
+    }
+  }
+  
   void _mostrarDialogoResultado(int experienciaGanada) {
     showDialog(
       context: context,
@@ -261,7 +306,7 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('🦅 Minijuego: ¡Salta con Machaco!'),
+        title: const Text('🎮 Minijuego: ¡Salta con tu Alebrije!'),
         backgroundColor: const Color(0xFF8B1538),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -287,7 +332,7 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Text(
-            '🦅 ¡Salta con Machaco!',
+            '🎮 ¡Salta con tu Alebrije!',
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -324,19 +369,38 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
             ),
           ),
           const SizedBox(height: 30),
-          ElevatedButton(
-            onPressed: _iniciarJuego,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF8B1538),
-              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton.icon(
+                onPressed: _descargarImagenAlebrije,
+                icon: const Icon(Icons.download),
+                label: const Text('📸 Descargar Imagen'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
               ),
-            ),
-            child: const Text(
-              '🎮 ¡JUGAR!',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
+              const SizedBox(width: 20),
+              ElevatedButton(
+                onPressed: _iniciarJuego,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B1538),
+                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                ),
+                child: const Text(
+                  '🎮 ¡JUGAR!',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -370,16 +434,28 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
             );
           }),
 
-          // 🦅 Alebrije saltando
+          // 🦅 Alebrije saltando (usando imagen real)
           Positioned(
-            left: 100,
-            bottom: 100 + _posicionAlebrije,
-            child: Transform.scale(
-              scale: _estaSaltando ? 1.1 : 1.0,
-              child: const Text(
-                '🦅',
-                style: TextStyle(fontSize: 60),
-              ),
+            left: 80,
+            bottom: 120 + _posicionAlebrije,
+            child: Consumer<AlebrijeProvider>(
+              builder: (context, provider, child) {
+                if (provider.alebrije == null) {
+                  return const Text('🦅', style: TextStyle(fontSize: 60));
+                }
+                
+                final generator = AlebrijeGenerator(provider.alebrije!);
+                final svgString = generator.generarSVG(width: 80, height: 80);
+                
+                return Transform.scale(
+                  scale: _estaSaltando ? 1.1 : 1.0,
+                  child: SvgPicture.string(
+                    svgString,
+                    width: 80,
+                    height: 80,
+                  ),
+                );
+              },
             ),
           ),
 
