@@ -26,7 +26,7 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
 
   // 🏃 Obstáculos
   final List<Map<String, dynamic>> _obstaculos = [];
-  double _velocidadJuego = 3.0;
+  double _velocidadJuego = 5.0; // Velocidad inicial más rápida
   Timer? _timerJuego;
 
   // 🎭 Animaciones
@@ -122,8 +122,8 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
         }
       }
 
-      // Aumentar dificultad con el tiempo
-      _velocidadJuego = 3.0 + (_tiempoSupervivencia.inSeconds / 10.0);
+      // Aumentar dificultad con el tiempo (aceleración progresiva)
+      _velocidadJuego = 5.0 + (_tiempoSupervivencia.inSeconds / 5.0); // Se acelera más rápido
 
       // Verificar colisiones
       _verificarColisiones();
@@ -141,8 +141,8 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
       'x': MediaQuery.of(context).size.width,
       'y': 0.0,
       'tipo': tipo,
-      'ancho': 50.0, // Más ancho
-      'alto': tipo == 'cactus' ? 70.0 : tipo == 'roca' ? 50.0 : 35.0, // Más proporcional
+      'ancho': 60.0, // Obstáculos más grandes
+      'alto': tipo == 'cactus' ? 90.0 : tipo == 'roca' ? 70.0 : 50.0, // Más grandes y visibles
     });
   }
 
@@ -278,16 +278,16 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
     Widget icono;
     switch (obstaculo['tipo']) {
       case 'cactus':
-        icono = const Text('🌵', style: TextStyle(fontSize: 40));
+        icono = const Text('🌵', style: TextStyle(fontSize: 60)); // Más grande
         break;
       case 'roca':
-        icono = const Text('🪨', style: TextStyle(fontSize: 35));
+        icono = const Text('🪨', style: TextStyle(fontSize: 50)); // Más grande
         break;
       case 'arbusto':
-        icono = const Text('🌿', style: TextStyle(fontSize: 30));
+        icono = const Text('🌿', style: TextStyle(fontSize: 40)); // Más grande
         break;
       default:
-        icono = const Text('❓', style: TextStyle(fontSize: 30));
+        icono = const Text('❓', style: TextStyle(fontSize: 40));
     }
 
     return Positioned(
