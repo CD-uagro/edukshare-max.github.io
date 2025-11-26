@@ -30,6 +30,7 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
   late AnimationController _jumpController;
   late AnimationController _blinkController;
   late AnimationController _tailController;
+  late AnimationController _mouthController;
   
   bool _mostrarHistorial = false;
   String _estadoEmocional = 'neutral'; // neutral, feliz, triste, hambriento, jugueton, cansado
@@ -48,6 +49,7 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
   final List<Offset> _particulas = [];
   final List<String> _mensajesAlebrije = [];
   final List<Map<String, dynamic>> _xpFlotantes = []; // Lista de XP ganados flotando
+  final List<Map<String, dynamic>> _croquetas = []; // Lista de croquetas cayendo
 
   @override
   void initState() {
@@ -100,6 +102,15 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
       vsync: this,
       duration: const Duration(milliseconds: 800),
     )..repeat(reverse: true);
+
+    // 🍖 Animación de comer (boca abriéndose)
+    _mouthController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    
+    // 🍗 Croquetas cayendo
+    final List<Map<String, dynamic>> _croquetas = []; // Lista de croquetas cayendo
 
     // ⏱️ Cargar alebrije CON DELAY para evitar 429 rate limiting
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -423,6 +434,53 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
         });
       }
     });
+  }
+  
+  void _iniciarAnimacionComer() {
+    // Animar la boca abriéndose
+    _mouthController.forward(from: 0);
+    
+    // Crear croquetas cayendo
+    setState(() {
+      for (int i = 0; i < 3; i++) {
+        _croquetas.add({
+          'x': -0.3 + (i * 0.3), // Posiciones horizontales distribuidas
+          'y': -0.8, // Empezar desde arriba
+          'velocidad': 0.02 + (i * 0.01), // Velocidades ligeramente diferentes
+          'rotacion': 0.0,
+        });
+      }
+    });
+    
+    // Animar las croquetas cayendo
+    _animarCroquetas();
+    
+    // Limpiar croquetas después de la animación
+    Future.delayed(const Duration(milliseconds: 2000), () {
+      if (mounted) {
+        setState(() {
+          _croquetas.clear();
+        });
+      }
+    });
+  }
+  
+  void _animarCroquetas() {
+    if (_croquetas.isEmpty) return;
+    
+    setState(() {
+      for (var croqueta in _croquetas) {
+        croqueta['y'] += croqueta['velocidad'];
+        croqueta['rotacion'] += 0.1;
+      }
+      // Remover croquetas que llegaron al suelo
+      _croquetas.removeWhere((croqueta) => croqueta['y'] > 0.5);
+    });
+    
+    // Continuar animación si quedan croquetas
+    if (_croquetas.isNotEmpty) {
+      Future.delayed(const Duration(milliseconds: 50), _animarCroquetas);
+    }
   }
   
   void _manejarToque() {
@@ -1039,6 +1097,16 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
         // Alebrije con múltiples animaciones combinadas
         GestureDetector(
           onTap: _manejarToque,
+          onPanUpdate: (details) {
+            // Permitir mover el alebrije con el mouse/touch
+            setState(() {
+              _posicionX += details.delta.dx / 100; // Suavizar el movimiento
+              _posicionY += details.delta.dy / 100;
+              // Limitar el movimiento dentro de la pantalla
+              _posicionX = _posicionX.clamp(-0.8, 0.8);
+              _posicionY = _posicionY.clamp(-0.5, 0.5);
+            });
+          },
           onLongPress: () {
             _mostrarMensajeAlebrije('¡Me haces sentir especial! 💖');
             _crearParticulasCorazon(const Offset(150, 150));
@@ -1065,6 +1133,7 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
               _jumpController,
               _blinkController,
               _tailController,
+              _mouthController,
             ]),
             builder: (context, child) {
               // Respiración suave
@@ -1127,6 +1196,24 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                             top: 20,
                             child: _buildEmojiExpresion(),
                           ),
+                          
+                          // 🍖 Boca abriéndose durante la alimentación
+                          if (_mouthController.value > 0)
+                            Positioned(
+                              bottom: 80 + (_mouthController.value * 20), // Boca se abre hacia abajo
+                              child: Container(
+                                width: 40,
+                                height: 20 + (_mouthController.value * 15),
+                                decoration: BoxDecoration(
+                                  color: Colors.pink[100],
+                                  borderRadius: BorderRadius.only(
+                                    bottomLeft: Radius.circular(20),
+                                    bottomRight: Radius.circular(20),
+                                  ),
+                                  border: Border.all(color: Colors.pink[300]!, width: 2),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -1136,6 +1223,32 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
             },
           ),
         ),
+        
+        // 🍗 Croquetas cayendo durante la alimentación
+        ..._croquetas.map((croqueta) {
+          return Positioned(
+            left: MediaQuery.of(context).size.width / 2 + (croqueta['x'] * 150),
+            top: MediaQuery.of(context).size.height / 2 + (croqueta['y'] * 200),
+            child: Transform.rotate(
+              angle: croqueta['rotacion'],
+              child: Container(
+                width: 20,
+                height: 15,
+                decoration: BoxDecoration(
+                  color: Colors.brown[400],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.brown[600]!, width: 1),
+                ),
+                child: const Center(
+                  child: Text(
+                    '🍖',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
         
         // Mensajes del alebrije (burbujas de diálogo)
         ..._mensajesAlebrije.asMap().entries.map((entry) {
@@ -1445,6 +1558,7 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
                       return;
                     }
                     provider.alimentar(20);
+                    _iniciarAnimacionComer(); // Animación de croquetas y boca abriéndose
                     final xpBase = 15;
                     final mult = provider.multiplicadorExperienciaTotal;
                     final xpTotal = (xpBase * mult).round();

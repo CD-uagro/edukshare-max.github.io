@@ -592,19 +592,18 @@ class AlebrijeEstado {
   static const int maxCuracionesDia = 3;
   static const int maxDescansosDia = 5;
   
-  // Verificar si ha pasado un día desde la última acción
-  bool get esNuevoDia {
+  // Verificar si ha pasado una hora desde la última acción
+  bool get esNuevaHora {
     final ahora = DateTime.now();
-    return ahora.day != ultimaAccionFecha.day ||
-           ahora.month != ultimaAccionFecha.month ||
-           ahora.year != ultimaAccionFecha.year;
+    final diferencia = ahora.difference(ultimaAccionFecha);
+    return diferencia.inHours >= 1;
   }
   
   // Verificar límites alcanzados
-  bool get puedeAlimentar => esNuevoDia || alimentacionesHoy < maxAlimentacionesDia;
-  bool get puedeJugar => esNuevoDia || juegosHoy < maxJuegosDia;
-  bool get puedeCurar => esNuevoDia || curacionesHoy < maxCuracionesDia;
-  bool get puedeDescansar => esNuevoDia || descansosHoy < maxDescansosDia;
+  bool get puedeAlimentar => esNuevaHora || alimentacionesHoy < maxAlimentacionesDia;
+  bool get puedeJugar => esNuevaHora || juegosHoy < maxJuegosDia;
+  bool get puedeCurar => esNuevaHora || curacionesHoy < maxCuracionesDia;
+  bool get puedeDescansar => esNuevaHora || descansosHoy < maxDescansosDia;
 
   factory AlebrijeEstado.fromJson(Map<String, dynamic> json) {
     return AlebrijeEstado(
@@ -674,8 +673,8 @@ class AlebrijeEstado {
     final decaimientoSalud = (horasSinCuidar / 12 * 3).round();
     final decaimientoEnergia = (horasSinInteractuar / 4 * 5).round();
 
-    // Resetear contadores si es un nuevo día
-    final nuevosContadores = esNuevoDia
+    // Resetear contadores si es una nueva hora
+    final nuevosContadores = esNuevaHora
         ? {'alimentacionesHoy': 0, 'juegosHoy': 0, 'curacionesHoy': 0, 'descansosHoy': 0}
         : {'alimentacionesHoy': alimentacionesHoy, 'juegosHoy': juegosHoy, 'curacionesHoy': curacionesHoy, 'descansosHoy': descansosHoy};
     
@@ -692,7 +691,7 @@ class AlebrijeEstado {
       juegosHoy: nuevosContadores['juegosHoy']!,
       curacionesHoy: nuevosContadores['curacionesHoy']!,
       descansosHoy: nuevosContadores['descansosHoy']!,
-      ultimaAccionFecha: esNuevoDia ? now : ultimaAccionFecha,
+      ultimaAccionFecha: esNuevaHora ? now : ultimaAccionFecha,
     );
   }
 
@@ -706,9 +705,9 @@ class AlebrijeEstado {
   /// Alimentar al alebrije (usando consultas médicas)
   AlebrijeEstado alimentar(int cantidad) {
     final ahora = DateTime.now();
-    final resetearContadores = esNuevoDia;
+    final resetearContadores = esNuevaHora;
     
-    // Si ya alcanzó el límite y no es nuevo día, no hacer nada
+    // Si ya alcanzó el límite y no es nueva hora, no hacer nada
     if (!puedeAlimentar && !resetearContadores) {
       return this;
     }
@@ -733,7 +732,7 @@ class AlebrijeEstado {
   /// Jugar con el alebrije
   AlebrijeEstado jugar() {
     final ahora = DateTime.now();
-    final resetearContadores = esNuevoDia;
+    final resetearContadores = esNuevaHora;
     
     if (!puedeJugar && !resetearContadores) {
       return this;
@@ -759,7 +758,7 @@ class AlebrijeEstado {
   /// Curar al alebrije (usando vacunas)
   AlebrijeEstado curar(int cantidad) {
     final ahora = DateTime.now();
-    final resetearContadores = esNuevoDia;
+    final resetearContadores = esNuevaHora;
     
     if (!puedeCurar && !resetearContadores) {
       return this;
@@ -785,7 +784,7 @@ class AlebrijeEstado {
   /// Descansar (recuperar energía)
   AlebrijeEstado descansar() {
     final ahora = DateTime.now();
-    final resetearContadores = esNuevoDia;
+    final resetearContadores = esNuevaHora;
     
     if (!puedeDescansar && !resetearContadores) {
       return this;
