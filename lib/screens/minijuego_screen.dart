@@ -40,7 +40,7 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
   
   // 📺 Contador de partidas para publicidad
   static int _partidasJugadas = 0;
-  static const String _urlPublicidad = 'https://www.facebook.com/share/p/1K43q5RCL9/';
+  static const String _urlPublicidad = 'https://www.facebook.com/share/p/1JfuqL6oa4/';
 
   @override
   void initState() {

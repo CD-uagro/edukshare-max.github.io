@@ -50876,7 +50876,7 @@ o.push(A.eV(B.ad3,new A.aAG(a,p),r))
 return A.hq(o,n,r,B.adf)},
 $S:18}
 A.aAE.prototype={
-$0(){var s,r=window.open("https://www.facebook.com/share/p/1K43q5RCL9/","_blank")
+$0(){var s,r=window.open("https://www.facebook.com/share/p/1JfuqL6oa4/","_blank")
 A.b48(r)
 s=this.b
 A.bl(s,!1).d9()
