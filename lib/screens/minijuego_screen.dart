@@ -42,18 +42,18 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
   void initState() {
     super.initState();
 
-    // Animación de salto
+    // Animación de salto - más larga y fluida
     _saltoController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 450), // Subida rápida
     );
 
     _animacionSalto = Tween<double>(
       begin: 0.0,
-      end: 140.0, // Altura generosa para saltar sobre obstáculos de 90px
+      end: 160.0, // Salto muy alto para pasar claramente los obstáculos
     ).animate(CurvedAnimation(
       parent: _saltoController,
-      curve: Curves.easeOut, // Más natural para un salto
+      curve: Curves.easeOutCubic, // Subida explosiva, más natural
     ));
 
     _animacionSalto.addListener(() {
@@ -147,18 +147,23 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
   }
 
   void _verificarColisiones() {
-    const anchoHuevo = 50.0; // Hitbox más pequeña que el visual
-    const posicionXHuevo = 90.0; // Centro del huevo
+    const anchoHuevo = 40.0; // Hitbox pequeña y justa
+    const posicionXHuevo = 95.0; // Centro del huevo ajustado
 
     for (var obstaculo in _obstaculos) {
-      // Colisión en X: solo cuando el huevo está sobre el obstáculo
-      final colisionX = posicionXHuevo < obstaculo['x'] + obstaculo['ancho'] &&
-                       posicionXHuevo + anchoHuevo > obstaculo['x'];
+      // Colisión en X: rango más reducido para ser más justo
+      final obstaculoX = obstaculo['x'] as double;
+      final obstaculoAncho = obstaculo['ancho'] as double;
+      
+      // Solo colisionar cuando el centro del huevo está sobre el obstáculo
+      final colisionX = posicionXHuevo + anchoHuevo > obstaculoX + 10 && // Margen izquierdo
+                       posicionXHuevo < obstaculoX + obstaculoAncho - 10; // Margen derecho
 
-      // Colisión en Y: el huevo debe estar CLARAMENTE por encima del obstáculo
-      // Si _posicionAlebrije >= obstaculo['alto'] - 30, está saltando lo suficiente
+      // Colisión en Y: mucho más generoso
+      // El huevo debe estar MUY bajo para chocar (prácticamente en el suelo)
       final alturaObstaculo = obstaculo['alto'] as double;
-      final colisionY = _posicionAlebrije < alturaObstaculo - 30; // 30px de margen generoso
+      final alturaSegura = alturaObstaculo - 50; // 50px de margen = muy generoso
+      final colisionY = _posicionAlebrije < alturaSegura;
 
       if (colisionX && colisionY) {
         _terminarJuego();
