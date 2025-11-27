@@ -494,12 +494,18 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
   /// 🔥 Activar poder especial del alebrije
   void _activarPoder() {
     final random = Random();
-    final poderes = ['🔥', '⚡', '❄️', '🌟', '💫', '🌈'];
-    final nombresPoderes = ['¡FUEGO!', '¡RAYO!', '¡HIELO!', '¡LUZ ESTELAR!', '¡PODER CÓSMICO!', '¡ARCOÍRIS!'];
-    final sonidosPoderes = ['FWOOOOSH!', 'CRACK!', 'SHHHHH!', 'BRILLLLL!', 'WOOOOOM!', 'SPARKLE!'];
+    
+    // 🔥 4 tipos de poderes que se intercalan
+    final poderes = [
+      {'emoji': '🔥', 'nombre': '¡LLAMAS ANCESTRALES!', 'color': Colors.orange},
+      {'emoji': '⚡', 'nombre': '¡TRUENO MÍSTICO!', 'color': Colors.yellow},
+      {'emoji': '❄️', 'nombre': '¡VENTISCA HELADA!', 'color': Colors.cyan},
+      {'emoji': '🌊', 'nombre': '¡OLEAJE SAGRADO!', 'color': Colors.blue},
+    ];
     
     final indice = random.nextInt(poderes.length);
-    _tipoPoder = poderes[indice];
+    final poder = poderes[indice];
+    _tipoPoder = poder['emoji'] as String;
     
     setState(() {
       _poderActivo = true;
@@ -508,8 +514,8 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
     // 🔊 Reproducir sonido épico del poder
     _reproducirSonidoPoder();
     
-    // Mostrar mensaje épico
-    _mostrarMensajeAlebrije('${nombresPoderes[indice]} ${_tipoPoder}${_tipoPoder}${_tipoPoder}');
+    // Mostrar mensaje épico (solo visual, sin XP)
+    _mostrarMensajeAlebrije('${poder['nombre']} ${_tipoPoder}${_tipoPoder}${_tipoPoder}');
     
     // Crear efectos visuales del poder
     _crearEfectosPoder(indice);
@@ -518,10 +524,7 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
     _ejecutarSacudida();
     _sparkleController.forward(from: 0);
     
-    // Dar experiencia bonus por activar poder
-    final provider = context.read<AlebrijeProvider>();
-    provider.agregarExperiencia(50, 'Poder especial activado');
-    _mostrarXPGanado(50, bonus: '¡PODER!');
+    // NO dar experiencia - solo es demostración visual del poder
     
     // Desactivar poder después de la animación
     Future.delayed(const Duration(seconds: 3), () {
@@ -614,22 +617,19 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
     final ahora = DateTime.now();
     final diferencia = ahora.difference(estado.ultimaAccionFecha);
     
-    // Si ha pasado una hora, el límite debería ser solo el diario
-    if (estado.esNuevaHora) {
-      if (contadorActual >= maxDiario) {
-        return '$tipoAccion: Límite diario alcanzado ($maxDiario veces). Vuelve mañana.';
-      } else {
-        return '¡Ya puedes $tipoAccion de nuevo!';
-      }
+    // Verificar cooldown y mostrar mensaje apropiado
+    final segundosRestantes = estado.segundosRestantesCooldown;
+    
+    if (contadorActual >= maxDiario && segundosRestantes > 0) {
+      // Cooldown activo
+      final minutos = segundosRestantes ~/ 60;
+      final segundos = segundosRestantes % 60;
+      final tiempoTexto = minutos > 0 ? '${minutos}m ${segundos}s' : '${segundos}s';
+      return '⏰ Espera $tiempoTexto para $tipoAccion. ¡Juega minijuegos para reducir el tiempo!';
+    } else if (contadorActual >= maxDiario) {
+      return '¡Ya puedes $tipoAccion de nuevo!';
     } else {
-      // No ha pasado una hora, mostrar tiempo restante
-      final minutosFaltantes = 60 - diferencia.inMinutes;
-      if (minutosFaltantes > 0) {
-        return '⏰ Espera ${minutosFaltantes} minutos para $tipoAccion otra vez';
-      } else {
-        // Por si acaso, si los minutos son negativos
-        return '¡Ya puedes $tipoAccion de nuevo!';
-      }
+      return '¡Aún te quedan ${maxDiario - contadorActual} acciones de $tipoAccion!';
     }
   }
   
@@ -1529,7 +1529,8 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
         
         // 🔥 Efectos visuales del poder
         ..._efectosPoder.map((efecto) {
-          final poderes = ['🔥', '⚡', '❄️', '🌟', '💫', '🌈'];
+          final poderes = ['🔥', '⚡', '❄️', '🌊']; // 4 poderes
+          final tipoIndex = (efecto['tipo'] as int) % poderes.length;
           return Positioned(
             left: MediaQuery.of(context).size.width / 2 + (efecto['x'] * 150),
             top: MediaQuery.of(context).size.height / 2 + (efecto['y'] * 150),
@@ -1538,7 +1539,7 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
               child: Transform.scale(
                 scale: efecto['escala'],
                 child: Text(
-                  poderes[efecto['tipo']],
+                  poderes[tipoIndex],
                   style: const TextStyle(fontSize: 30),
                 ),
               ),
@@ -1950,43 +1951,35 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
     );
   }
   
-  /// Construir botón de minijuego con cooldown
+  /// Construir botón de minijuego - ¡SIEMPRE DISPONIBLE!
+  /// Los minijuegos ayudan a reducir el cooldown de otras acciones
   Widget _buildBotonMinijuego(AlebrijeProvider provider) {
     final estado = provider.alebrije?.estado;
-    final puedeJugar = estado?.puedeJugarMinijuego ?? true;
-    final segundosRestantes = estado?.segundosRestantesMinijuego ?? 0;
     final bonusAcumulado = estado?.bonusCooldownSegundos ?? 0;
+    final segundosRestantesCooldown = estado?.segundosRestantesCooldown ?? 0;
     
-    // Formatear tiempo restante
-    String tiempoRestante = '';
-    if (segundosRestantes > 0) {
-      final minutos = segundosRestantes ~/ 60;
-      final segundos = segundosRestantes % 60;
-      tiempoRestante = minutos > 0 
-          ? '${minutos}m ${segundos}s'
-          : '${segundos}s';
+    // Formatear bonus acumulado
+    String bonusTexto = '';
+    if (bonusAcumulado > 0) {
+      final minutos = bonusAcumulado ~/ 60;
+      final segundos = bonusAcumulado % 60;
+      bonusTexto = minutos > 0 ? '${minutos}m ${segundos}s' : '${segundos}s';
     }
     
     return Column(
       children: [
         ElevatedButton.icon(
-          onPressed: puedeJugar ? () {
-            // Usar el bonus acumulado al empezar a jugar
-            if (bonusAcumulado > 0) {
-              provider.usarBonusCooldown();
-            }
+          onPressed: () {
             Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (context) => MinijuegoScreen(),
               ),
             );
-          } : null,
-          icon: Icon(puedeJugar ? Icons.games : Icons.timer),
-          label: Text(puedeJugar 
-              ? '🎮 Minijuego' 
-              : '⏰ Espera $tiempoRestante'),
+          },
+          icon: const Icon(Icons.games),
+          label: const Text('🎮 Minijuego'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: puedeJugar ? Colors.purple : Colors.grey,
+            backgroundColor: Colors.purple,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 12),
             shape: RoundedRectangleBorder(
@@ -1994,14 +1987,34 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
             ),
           ),
         ),
-        if (bonusAcumulado > 0 && puedeJugar)
+        const SizedBox(height: 4),
+        Text(
+          '¡Juega para reducir el cooldown!',
+          style: TextStyle(
+            fontSize: 10,
+            color: Colors.purple.shade300,
+          ),
+        ),
+        if (bonusAcumulado > 0)
           Padding(
-            padding: const EdgeInsets.only(top: 4),
+            padding: const EdgeInsets.only(top: 2),
             child: Text(
-              '✨ Bonus: -${bonusAcumulado}s en próximo cooldown',
+              '✨ Bonus acumulado: -$bonusTexto',
               style: TextStyle(
                 fontSize: 11,
-                color: Colors.purple.shade300,
+                fontWeight: FontWeight.bold,
+                color: Colors.green.shade400,
+              ),
+            ),
+          ),
+        if (segundosRestantesCooldown > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              '⏰ Cooldown restante: ${segundosRestantesCooldown ~/ 60}m ${segundosRestantesCooldown % 60}s',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.orange.shade400,
               ),
             ),
           ),

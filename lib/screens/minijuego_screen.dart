@@ -346,8 +346,16 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
     final provider = context.read<AlebrijeProvider>();
     provider.registrarMinijuego(_puntuacion);
     
-    // Calcular bonus de tiempo ganado (cada 100 puntos = 30 segundos)
+    // Calcular bonus de tiempo ganado (cada 100 puntos = 30 segundos de reducción)
     final bonusTiempo = (_puntuacion / 100 * 30).round();
+    
+    // Formatear el bonus
+    String bonusTexto = '';
+    if (bonusTiempo > 0) {
+      final minutos = bonusTiempo ~/ 60;
+      final segundos = bonusTiempo % 60;
+      bonusTexto = minutos > 0 ? '${minutos}m ${segundos}s' : '${segundos}s';
+    }
     
     showDialog(
       context: context,
@@ -374,17 +382,30 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
+                  color: Colors.green.shade50,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.shade200),
+                  border: Border.all(color: Colors.green.shade200),
                 ),
-                child: Text(
-                  '⏰ +${bonusTiempo}s de bonus para próximo juego',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade700,
-                  ),
+                child: Column(
+                  children: [
+                    const Icon(Icons.speed, color: Colors.green, size: 24),
+                    const SizedBox(height: 4),
+                    Text(
+                      '⏰ -$bonusTexto de cooldown',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green.shade700,
+                      ),
+                    ),
+                    Text(
+                      '¡Tus acciones se recargan más rápido!',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.green.shade600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
