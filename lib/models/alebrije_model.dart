@@ -569,6 +569,11 @@ class AlebrijeEstado {
   final int curacionesHoy;
   final int descansosHoy;
   final DateTime ultimaAccionFecha;
+  
+  // 🎮 Sistema de cooldown para minijuegos (5 minutos)
+  final DateTime ultimoMinijuego;
+  final int bonusCooldownSegundos; // Segundos de bonus acumulados por puntos
+  static const int cooldownMinijuegoSegundos = 300; // 5 minutos = 300 segundos
 
   AlebrijeEstado({
     required this.hambre,
@@ -584,7 +589,10 @@ class AlebrijeEstado {
     this.curacionesHoy = 0,
     this.descansosHoy = 0,
     DateTime? ultimaAccionFecha,
-  }) : ultimaAccionFecha = ultimaAccionFecha ?? DateTime.now();
+    DateTime? ultimoMinijuego,
+    this.bonusCooldownSegundos = 0,
+  }) : ultimaAccionFecha = ultimaAccionFecha ?? DateTime.now(),
+       ultimoMinijuego = ultimoMinijuego ?? DateTime.now().subtract(const Duration(minutes: 10));
   
   // Límites máximos diarios
   static const int maxAlimentacionesDia = 5;
@@ -604,6 +612,23 @@ class AlebrijeEstado {
   bool get puedeJugar => esNuevaHora || juegosHoy < maxJuegosDia;
   bool get puedeCurar => esNuevaHora || curacionesHoy < maxCuracionesDia;
   bool get puedeDescansar => esNuevaHora || descansosHoy < maxDescansosDia;
+  
+  // 🎮 Verificar cooldown de minijuego (5 minutos - bonus)
+  bool get puedeJugarMinijuego {
+    final ahora = DateTime.now();
+    final cooldownReal = cooldownMinijuegoSegundos - bonusCooldownSegundos;
+    final segundosDesdeUltimo = ahora.difference(ultimoMinijuego).inSeconds;
+    return segundosDesdeUltimo >= cooldownReal || cooldownReal <= 0;
+  }
+  
+  /// Segundos restantes para poder jugar minijuego
+  int get segundosRestantesMinijuego {
+    if (puedeJugarMinijuego) return 0;
+    final ahora = DateTime.now();
+    final cooldownReal = cooldownMinijuegoSegundos - bonusCooldownSegundos;
+    final segundosDesdeUltimo = ahora.difference(ultimoMinijuego).inSeconds;
+    return (cooldownReal - segundosDesdeUltimo).clamp(0, cooldownMinijuegoSegundos);
+  }
 
   factory AlebrijeEstado.fromJson(Map<String, dynamic> json) {
     return AlebrijeEstado(
@@ -622,6 +647,10 @@ class AlebrijeEstado {
       ultimaAccionFecha: json['ultimaAccionFecha'] != null
           ? DateTime.parse(json['ultimaAccionFecha'])
           : DateTime.now(),
+      ultimoMinijuego: json['ultimoMinijuego'] != null
+          ? DateTime.parse(json['ultimoMinijuego'])
+          : DateTime.now().subtract(const Duration(minutes: 10)),
+      bonusCooldownSegundos: json['bonusCooldownSegundos'] ?? 0,
     );
   }
 
@@ -639,6 +668,8 @@ class AlebrijeEstado {
     'curacionesHoy': curacionesHoy,
     'descansosHoy': descansosHoy,
     'ultimaAccionFecha': ultimaAccionFecha.toIso8601String(),
+    'ultimoMinijuego': ultimoMinijuego.toIso8601String(),
+    'bonusCooldownSegundos': bonusCooldownSegundos,
   };
 
   factory AlebrijeEstado.inicial() {
@@ -726,6 +757,8 @@ class AlebrijeEstado {
       curacionesHoy: resetearContadores ? 0 : curacionesHoy,
       descansosHoy: resetearContadores ? 0 : descansosHoy,
       ultimaAccionFecha: ahora,
+      ultimoMinijuego: ultimoMinijuego,
+      bonusCooldownSegundos: bonusCooldownSegundos,
     );
   }
 
@@ -752,6 +785,8 @@ class AlebrijeEstado {
       curacionesHoy: resetearContadores ? 0 : curacionesHoy,
       descansosHoy: resetearContadores ? 0 : descansosHoy,
       ultimaAccionFecha: ahora,
+      ultimoMinijuego: ultimoMinijuego,
+      bonusCooldownSegundos: bonusCooldownSegundos,
     );
   }
 
@@ -778,6 +813,8 @@ class AlebrijeEstado {
       curacionesHoy: resetearContadores ? 1 : curacionesHoy + 1,
       descansosHoy: resetearContadores ? 0 : descansosHoy,
       ultimaAccionFecha: ahora,
+      ultimoMinijuego: ultimoMinijuego,
+      bonusCooldownSegundos: bonusCooldownSegundos,
     );
   }
 
@@ -804,6 +841,58 @@ class AlebrijeEstado {
       curacionesHoy: resetearContadores ? 0 : curacionesHoy,
       descansosHoy: resetearContadores ? 1 : descansosHoy + 1,
       ultimaAccionFecha: ahora,
+      ultimoMinijuego: ultimoMinijuego,
+      bonusCooldownSegundos: bonusCooldownSegundos,
+    );
+  }
+  
+  /// 🎮 Registrar que se jugó un minijuego y agregar bonus de tiempo
+  /// puntos: puntos obtenidos en el minijuego
+  /// Cada 100 puntos = 30 segundos de bonus para el próximo juego
+  AlebrijeEstado registrarMinijuego(int puntos) {
+    final ahora = DateTime.now();
+    // Calcular bonus: cada 100 puntos = 30 segundos de reducción
+    final bonusGanado = (puntos / 100 * 30).round();
+    // El bonus máximo es el cooldown completo (5 min = 300 seg)
+    final nuevoBonus = (bonusCooldownSegundos + bonusGanado).clamp(0, cooldownMinijuegoSegundos);
+    
+    return AlebrijeEstado(
+      hambre: hambre,
+      felicidad: felicidad,
+      salud: salud,
+      energia: energia,
+      ultimaAlimentacion: ultimaAlimentacion,
+      ultimaInteraccion: ultimaInteraccion,
+      ultimoCuidado: ultimoCuidado,
+      diasConsecutivos: diasConsecutivos,
+      alimentacionesHoy: alimentacionesHoy,
+      juegosHoy: juegosHoy,
+      curacionesHoy: curacionesHoy,
+      descansosHoy: descansosHoy,
+      ultimaAccionFecha: ultimaAccionFecha,
+      ultimoMinijuego: ahora,
+      bonusCooldownSegundos: nuevoBonus,
+    );
+  }
+  
+  /// 🔥 Usar el bonus acumulado (resetear después de jugar)
+  AlebrijeEstado usarBonus() {
+    return AlebrijeEstado(
+      hambre: hambre,
+      felicidad: felicidad,
+      salud: salud,
+      energia: energia,
+      ultimaAlimentacion: ultimaAlimentacion,
+      ultimaInteraccion: ultimaInteraccion,
+      ultimoCuidado: ultimoCuidado,
+      diasConsecutivos: diasConsecutivos,
+      alimentacionesHoy: alimentacionesHoy,
+      juegosHoy: juegosHoy,
+      curacionesHoy: curacionesHoy,
+      descansosHoy: descansosHoy,
+      ultimaAccionFecha: ultimaAccionFecha,
+      ultimoMinijuego: ultimoMinijuego,
+      bonusCooldownSegundos: 0, // Resetear bonus después de usarlo
     );
   }
 }

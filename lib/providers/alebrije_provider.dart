@@ -199,6 +199,33 @@ class AlebrijeProvider extends ChangeNotifier {
     notifyListeners();
   }
   
+  /// 🎮 Registrar que se jugó un minijuego y dar bonus de cooldown
+  Future<void> registrarMinijuego(int puntos) async {
+    if (_alebrije == null) return;
+    
+    _alebrije = _alebrije!.copyWith(
+      estado: _alebrije!.estado.registrarMinijuego(puntos),
+      updatedAt: DateTime.now(),
+    );
+    
+    print('🎮 Minijuego registrado: $puntos puntos - Bonus: ${_alebrije!.estado.bonusCooldownSegundos}s');
+    await _guardarEstado();
+    notifyListeners();
+  }
+  
+  /// 🔥 Usar bonus de cooldown acumulado
+  Future<void> usarBonusCooldown() async {
+    if (_alebrije == null) return;
+    
+    _alebrije = _alebrije!.copyWith(
+      estado: _alebrije!.estado.usarBonus(),
+      updatedAt: DateTime.now(),
+    );
+    
+    await _guardarEstado();
+    notifyListeners();
+  }
+  
   /// Renombrar el alebrije
   Future<void> renombrar(String nuevoNombre) async {
     if (_alebrije == null) return;

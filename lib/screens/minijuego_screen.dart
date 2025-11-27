@@ -8,6 +8,7 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:convert';
 import 'dart:html' as html;
+import 'dart:js' as js;
 
 class MinijuegoScreen extends StatefulWidget {
   const MinijuegoScreen({super.key});
@@ -37,6 +38,11 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
   int _obstaculosEvitados = 0;
   Duration _tiempoSupervivencia = Duration.zero;
   DateTime? _inicioJuego;
+  
+  // 🎵 Audio
+  Timer? _timerMusica;
+  int _notaActual = 0;
+  bool _musicaActiva = false;
 
   @override
   void initState() {
@@ -79,7 +85,95 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
   void dispose() {
     _saltoController.dispose();
     _timerJuego?.cancel();
+    _timerMusica?.cancel();
+    _detenerMusica();
     super.dispose();
+  }
+  
+  // 🎵 Funciones de audio con Web Audio API
+  void _reproducirNota(double frecuencia, double duracion, {double volumen = 0.1}) {
+    try {
+      js.context.callMethod('eval', ['''
+        (function() {
+          var audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          var oscillator = audioContext.createOscillator();
+          var gainNode = audioContext.createGain();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          
+          oscillator.frequency.value = $frecuencia;
+          oscillator.type = 'sine';
+          
+          gainNode.gain.setValueAtTime($volumen, audioContext.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + $duracion);
+          
+          oscillator.start(audioContext.currentTime);
+          oscillator.stop(audioContext.currentTime + $duracion);
+        })();
+      ''']);
+    } catch (e) {
+      print('Error reproduciendo nota: $e');
+    }
+  }
+  
+  void _iniciarMusica() {
+    if (_musicaActiva) return;
+    _musicaActiva = true;
+    
+    // Melodía simple y alegre en loop
+    final notas = [
+      {'freq': 523.25, 'dur': 0.15}, // C5
+      {'freq': 587.33, 'dur': 0.15}, // D5
+      {'freq': 659.25, 'dur': 0.15}, // E5
+      {'freq': 523.25, 'dur': 0.15}, // C5
+      {'freq': 783.99, 'dur': 0.20}, // G5
+      {'freq': 659.25, 'dur': 0.15}, // E5
+      {'freq': 523.25, 'dur': 0.25}, // C5
+      {'freq': 0.0, 'dur': 0.15},      // Silencio
+    ];
+    
+    _timerMusica = Timer.periodic(const Duration(milliseconds: 200), (timer) {
+      if (!_musicaActiva || !mounted) {
+        timer.cancel();
+        return;
+      }
+      
+      final nota = notas[_notaActual % notas.length];
+      final freq = (nota['freq'] as double);
+      final dur = (nota['dur'] as double);
+      if (freq > 0) {
+        _reproducirNota(freq, dur, volumen: 0.05);
+      }
+      _notaActual++;
+    });
+  }
+  
+  void _detenerMusica() {
+    _musicaActiva = false;
+    _timerMusica?.cancel();
+    _notaActual = 0;
+  }
+  
+  void _reproducirSonidoSalto() {
+    // Sonido de salto: tono que sube
+    _reproducirNota(400, 0.1, volumen: 0.15);
+    Future.delayed(const Duration(milliseconds: 50), () {
+      _reproducirNota(600, 0.1, volumen: 0.12);
+    });
+  }
+  
+  void _reproducirSonidoColision() {
+    // Sonido de choque: tono que baja
+    _reproducirNota(200, 0.3, volumen: 0.2);
+    Future.delayed(const Duration(milliseconds: 100), () {
+      _reproducirNota(100, 0.3, volumen: 0.15);
+    });
+  }
+  
+  void _reproducirSonidoPuntos() {
+    // Sonido de puntos: tono alegre
+    _reproducirNota(880, 0.1, volumen: 0.1);
   }
 
   void _iniciarJuego() {
@@ -92,6 +186,9 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
       _inicioJuego = DateTime.now();
       _obstaculos.clear();
     });
+    
+    // Iniciar música de fondo
+    _iniciarMusica();
 
     // Iniciar loop del juego
     _timerJuego = Timer.periodic(const Duration(milliseconds: 50), _actualizarJuego);
@@ -173,6 +270,7 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
       if (!obstaculo.containsKey('contado') && obstaculo['x'] + obstaculo['ancho'] < posicionXHuevo) {
         obstaculo['contado'] = true;
         _obstaculosEvitados++;
+        _reproducirSonidoPuntos(); // Sonido al pasar obstáculo
       }
     }
   }
@@ -182,12 +280,15 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
       setState(() {
         _estaSaltando = true;
       });
+      _reproducirSonidoSalto(); // Sonido de salto
       _saltoController.forward(from: 0);
     }
   }
 
   void _terminarJuego() {
     _timerJuego?.cancel();
+    _detenerMusica(); // Detener música
+    _reproducirSonidoColision(); // Sonido de game over
     setState(() {
       _juegoTerminado = true;
     });
@@ -241,6 +342,13 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
   }
   
   void _mostrarDialogoResultado(int experienciaGanada) {
+    // Registrar minijuego y dar bonus de cooldown
+    final provider = context.read<AlebrijeProvider>();
+    provider.registrarMinijuego(_puntuacion);
+    
+    // Calcular bonus de tiempo ganado (cada 100 puntos = 30 segundos)
+    final bonusTiempo = (_puntuacion / 100 * 30).round();
+    
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -261,6 +369,25 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
                 color: Colors.green,
               ),
             ),
+            if (bonusTiempo > 0) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Text(
+                  '⏰ +${bonusTiempo}s de bonus para próximo juego',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade700,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
         actions: [
@@ -268,7 +395,6 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
             onPressed: () {
               Navigator.of(context).pop();
               // Otorgar experiencia
-              final provider = context.read<AlebrijeProvider>();
               provider.agregarExperiencia(experienciaGanada, 'Minijuego del huevo saltarín');
               // Reiniciar para jugar de nuevo
               _reiniciarParaJugarDeNuevo();
@@ -280,7 +406,6 @@ class _MinijuegoScreenState extends State<MinijuegoScreen> with TickerProviderSt
               Navigator.of(context).pop();
               Navigator.of(context).pop(); // Volver a pantalla principal
               // Otorgar experiencia
-              final provider = context.read<AlebrijeProvider>();
               provider.agregarExperiencia(experienciaGanada, 'Minijuego del huevo saltarín');
             },
             child: const Text('Salir'),

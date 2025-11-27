@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:ui' as ui;
 import 'dart:math';
+import 'dart:js' as js;
 import '../providers/alebrije_provider.dart';
 import '../providers/session_provider.dart';
 import '../services/alebrije_generator.dart';
@@ -39,6 +40,11 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
   int _toquesConsecutivos = 0;
   DateTime? _ultimoToque;
   
+  // 🔥 Sistema de poder del alebrije
+  int _estimulacionAcumulada = 0; // Se acumula con cada toque
+  bool _poderActivo = false;
+  String _tipoPoder = ''; // fuego, rayo, hielo, etc.
+  
   // 🚶 Estado de movimiento autónomo
   double _posicionX = 0.0; // -1.0 a 1.0 (izquierda a derecha)
   double _posicionY = 0.0; // Para saltos
@@ -51,6 +57,7 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
   final List<String> _mensajesAlebrije = [];
   final List<Map<String, dynamic>> _xpFlotantes = []; // Lista de XP ganados flotando
   final List<Map<String, dynamic>> _croquetas = []; // Lista de croquetas cayendo
+  final List<Map<String, dynamic>> _efectosPoder = []; // Efectos visuales del poder
 
   @override
   void initState() {
@@ -484,6 +491,125 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
     }
   }
   
+  /// 🔥 Activar poder especial del alebrije
+  void _activarPoder() {
+    final random = Random();
+    final poderes = ['🔥', '⚡', '❄️', '🌟', '💫', '🌈'];
+    final nombresPoderes = ['¡FUEGO!', '¡RAYO!', '¡HIELO!', '¡LUZ ESTELAR!', '¡PODER CÓSMICO!', '¡ARCOÍRIS!'];
+    final sonidosPoderes = ['FWOOOOSH!', 'CRACK!', 'SHHHHH!', 'BRILLLLL!', 'WOOOOOM!', 'SPARKLE!'];
+    
+    final indice = random.nextInt(poderes.length);
+    _tipoPoder = poderes[indice];
+    
+    setState(() {
+      _poderActivo = true;
+    });
+    
+    // 🔊 Reproducir sonido épico del poder
+    _reproducirSonidoPoder();
+    
+    // Mostrar mensaje épico
+    _mostrarMensajeAlebrije('${nombresPoderes[indice]} ${_tipoPoder}${_tipoPoder}${_tipoPoder}');
+    
+    // Crear efectos visuales del poder
+    _crearEfectosPoder(indice);
+    
+    // Ejecutar animación dramática
+    _ejecutarSacudida();
+    _sparkleController.forward(from: 0);
+    
+    // Dar experiencia bonus por activar poder
+    final provider = context.read<AlebrijeProvider>();
+    provider.agregarExperiencia(50, 'Poder especial activado');
+    _mostrarXPGanado(50, bonus: '¡PODER!');
+    
+    // Desactivar poder después de la animación
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() {
+          _poderActivo = false;
+          _efectosPoder.clear();
+        });
+      }
+    });
+  }
+  
+  /// Crear efectos visuales para el poder
+  void _crearEfectosPoder(int tipoPoder) {
+    final random = Random();
+    
+    setState(() {
+      // Crear partículas del poder
+      for (int i = 0; i < 20; i++) {
+        _efectosPoder.add({
+          'x': random.nextDouble() * 2 - 1, // -1 a 1
+          'y': random.nextDouble() * 2 - 1,
+          'velocidadX': (random.nextDouble() - 0.5) * 0.1,
+          'velocidadY': (random.nextDouble() - 0.5) * 0.1,
+          'escala': 0.5 + random.nextDouble() * 0.5,
+          'opacidad': 1.0,
+          'tipo': tipoPoder,
+        });
+      }
+    });
+    
+    // Animar los efectos
+    _animarEfectosPoder();
+  }
+  
+  void _animarEfectosPoder() {
+    if (_efectosPoder.isEmpty || !_poderActivo) return;
+    
+    setState(() {
+      for (var efecto in _efectosPoder) {
+        efecto['x'] += efecto['velocidadX'];
+        efecto['y'] += efecto['velocidadY'];
+        efecto['escala'] *= 1.02; // Crecer ligeramente
+        efecto['opacidad'] -= 0.02; // Desvanecer
+      }
+      // Remover efectos que se desvanecieron
+      _efectosPoder.removeWhere((e) => e['opacidad'] <= 0);
+    });
+    
+    if (_efectosPoder.isNotEmpty) {
+      Future.delayed(const Duration(milliseconds: 50), _animarEfectosPoder);
+    }
+  }
+  
+  // 🔊 Reproducir sonido de poder épico
+  void _reproducirSonidoPoder() {
+    try {
+      // Crear una secuencia de tonos épicos que suben
+      js.context.callMethod('eval', ['''
+        (function() {
+          var audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          var notas = [400, 500, 600, 800, 1000, 1200];
+          
+          notas.forEach(function(freq, i) {
+            setTimeout(function() {
+              var oscillator = audioContext.createOscillator();
+              var gainNode = audioContext.createGain();
+              
+              oscillator.connect(gainNode);
+              gainNode.connect(audioContext.destination);
+              
+              oscillator.frequency.value = freq;
+              oscillator.type = 'sawtooth';
+              
+              gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+              gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+              
+              oscillator.start(audioContext.currentTime);
+              oscillator.stop(audioContext.currentTime + 0.3);
+            }, i * 80);
+          });
+        })();
+      ''']);
+    } catch (e) {
+      print('Error reproduciendo sonido de poder: \$e');
+    }
+  }
+  
   String _getMensajeLimite(AlebrijeEstado estado, String tipoAccion, int maxDiario, int contadorActual) {
     final ahora = DateTime.now();
     final diferencia = ahora.difference(estado.ultimaAccionFecha);
@@ -511,8 +637,10 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
     final ahora = DateTime.now();
     if (_ultimoToque != null && ahora.difference(_ultimoToque!).inSeconds < 2) {
       _toquesConsecutivos++;
+      _estimulacionAcumulada += 10; // Acumular estimulación
     } else {
       _toquesConsecutivos = 1;
+      _estimulacionAcumulada = 10;
     }
     _ultimoToque = ahora;
     
@@ -520,12 +648,21 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
       _estaSiendoTocado = true;
     });
     
+    // 🔥 ACTIVAR PODER cuando la estimulación es alta
+    if (_estimulacionAcumulada >= 100 && !_poderActivo) {
+      _activarPoder();
+      _estimulacionAcumulada = 0;
+      _toquesConsecutivos = 0;
+    }
     // Reacciones según toques
-    if (_toquesConsecutivos >= 5) {
-      _mostrarMensajeAlebrije('¡Jajaja, eso hace cosquillas! 😆');
+    else if (_toquesConsecutivos >= 8) {
+      _mostrarMensajeAlebrije('¡¡SIENTO MI PODER CRECER!! 🔥⚡');
       _ejecutarSacudida();
       _sparkleController.forward(from: 0);
-      _toquesConsecutivos = 0;
+    } else if (_toquesConsecutivos >= 5) {
+      _mostrarMensajeAlebrije('¡Jajaja, eso hace cosquillas! 😆 (${_estimulacionAcumulada}%)');
+      _ejecutarSacudida();
+      _sparkleController.forward(from: 0);
     } else if (_toquesConsecutivos >= 3) {
       _mostrarMensajeAlebrije('¡Me encanta tu atención! ❤️');
       _ejecutarRebote();
@@ -1390,6 +1527,99 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
           );
         }).toList(),
         
+        // 🔥 Efectos visuales del poder
+        ..._efectosPoder.map((efecto) {
+          final poderes = ['🔥', '⚡', '❄️', '🌟', '💫', '🌈'];
+          return Positioned(
+            left: MediaQuery.of(context).size.width / 2 + (efecto['x'] * 150),
+            top: MediaQuery.of(context).size.height / 2 + (efecto['y'] * 150),
+            child: Opacity(
+              opacity: (efecto['opacidad'] as double).clamp(0.0, 1.0),
+              child: Transform.scale(
+                scale: efecto['escala'],
+                child: Text(
+                  poderes[efecto['tipo']],
+                  style: const TextStyle(fontSize: 30),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+        
+        // 🔥 Aura de poder cuando está activo
+        if (_poderActivo)
+          Container(
+            width: 350,
+            height: 350,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.orange.withOpacity(0.6),
+                  blurRadius: 50,
+                  spreadRadius: 20,
+                ),
+                BoxShadow(
+                  color: Colors.red.withOpacity(0.4),
+                  blurRadius: 80,
+                  spreadRadius: 30,
+                ),
+              ],
+            ),
+          ),
+        
+        // 📊 Barra de estimulación (visible solo cuando se está estimulando)
+        if (_estimulacionAcumulada > 0 && _estimulacionAcumulada < 100)
+          Positioned(
+            bottom: -30,
+            child: Container(
+              width: 200,
+              height: 15,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey.shade400),
+              ),
+              child: Stack(
+                children: [
+                  // Barra de progreso
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 100),
+                    width: 200 * (_estimulacionAcumulada / 100),
+                    height: 15,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.orange,
+                          Colors.red,
+                          Colors.purple,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  // Texto
+                  Center(
+                    child: Text(
+                      '🔥 ${_estimulacionAcumulada}%',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black54,
+                            blurRadius: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        
         // Indicador de toque "Toca aquí"
         if (_toquesConsecutivos == 0 && _ultimoToque == null)
           Positioned(
@@ -1711,30 +1941,71 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
           Row(
             children: [
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => MinijuegoScreen(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.games),
-                  label: const Text('🎮 Minijuego'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
+                child: _buildBotonMinijuego(provider),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+  
+  /// Construir botón de minijuego con cooldown
+  Widget _buildBotonMinijuego(AlebrijeProvider provider) {
+    final estado = provider.alebrije?.estado;
+    final puedeJugar = estado?.puedeJugarMinijuego ?? true;
+    final segundosRestantes = estado?.segundosRestantesMinijuego ?? 0;
+    final bonusAcumulado = estado?.bonusCooldownSegundos ?? 0;
+    
+    // Formatear tiempo restante
+    String tiempoRestante = '';
+    if (segundosRestantes > 0) {
+      final minutos = segundosRestantes ~/ 60;
+      final segundos = segundosRestantes % 60;
+      tiempoRestante = minutos > 0 
+          ? '${minutos}m ${segundos}s'
+          : '${segundos}s';
+    }
+    
+    return Column(
+      children: [
+        ElevatedButton.icon(
+          onPressed: puedeJugar ? () {
+            // Usar el bonus acumulado al empezar a jugar
+            if (bonusAcumulado > 0) {
+              provider.usarBonusCooldown();
+            }
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => MinijuegoScreen(),
+              ),
+            );
+          } : null,
+          icon: Icon(puedeJugar ? Icons.games : Icons.timer),
+          label: Text(puedeJugar 
+              ? '🎮 Minijuego' 
+              : '⏰ Espera $tiempoRestante'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: puedeJugar ? Colors.purple : Colors.grey,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        if (bonusAcumulado > 0 && puedeJugar)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              '✨ Bonus: -${bonusAcumulado}s en próximo cooldown',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.purple.shade300,
+              ),
+            ),
+          ),
+      ],
     );
   }
 
