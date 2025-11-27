@@ -121,16 +121,16 @@ class _AlebrijeScreenState extends State<AlebrijeScreen> with TickerProviderStat
       final sessionProvider = context.read<SessionProvider>();
       final matricula = sessionProvider.carnet?.matricula ?? '15662';
       
-      // Timeout de respaldo: si todo tarda demasiado (25s), mostrar interfaz
-      Future.delayed(const Duration(seconds: 25), () {
+      // Timeout de respaldo: si todo tarda demasiado (45s), mostrar interfaz
+      Future.delayed(const Duration(seconds: 45), () {
         if (mounted && !_verificacionAzureCompleta) {
-          print('⏱️ Timeout de respaldo: mostrando interfaz después de 25 segundos');
+          print('⏱️ Timeout de respaldo: mostrando interfaz después de 45 segundos');
           setState(() => _verificacionAzureCompleta = true);
         }
       });
       
-      // Esperar 8 segundos para dar tiempo a que terminen las llamadas de promociones
-      await Future.delayed(const Duration(seconds: 8));
+      // Esperar 2 segundos para evitar conflictos con otras llamadas
+      await Future.delayed(const Duration(seconds: 2));
       
       if (!mounted) return;
       
