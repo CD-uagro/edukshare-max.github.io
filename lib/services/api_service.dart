@@ -1,9 +1,13 @@
 // 🌐 SERVICIO API SASU - OPTIMIZADO Y ROBUSTO
 // Con reintentos automáticos, timeouts inteligentes y manejo de errores profesional
 
+// ignore_for_file: avoid_print, curly_braces_in_flow_control_structures, unnecessary_brace_in_string_interps
+
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:carnet_digital_uagro/models/carnet_model.dart';
 import 'package:carnet_digital_uagro/models/cita_model.dart';
 import 'package:carnet_digital_uagro/models/promocion_salud_model.dart';
@@ -14,13 +18,17 @@ class ApiService {
   // 🌐 BACKEND PRODUCCIÓN EN RENDER
   static const String baseUrl = 'https://carnet-alumnos-nodes.onrender.com';
   // static const String baseUrl = 'http://localhost:3000'; // Para pruebas locales
-  
+
   // ⚙️ CONFIGURACIÓN DE REINTENTOS Y TIMEOUTS
   static const int maxRetries = 3;
-  static const Duration shortTimeout = Duration(seconds: 8);  // Health check
-  static const Duration normalTimeout = Duration(seconds: 20); // Operaciones normales
-  static const Duration longTimeout = Duration(seconds: 60);   // Login con cold start (Render puede tardar 50-60s)
-  
+  static const Duration shortTimeout = Duration(seconds: 8); // Health check
+  static const Duration normalTimeout = Duration(
+    seconds: 20,
+  ); // Operaciones normales
+  static const Duration longTimeout = Duration(
+    seconds: 60,
+  ); // Login con cold start (Render puede tardar 50-60s)
+
   // 🔄 MÉTODO AUXILIAR: REINTENTO CON BACKOFF EXPONENCIAL
   static Future<T?> _retryWithBackoff<T>(
     Future<T> Function() operation, {
@@ -37,122 +45,138 @@ class ApiService {
       } catch (e) {
         final isLastAttempt = attempt == maxAttempts;
         final errorMsg = e.toString();
-        
+
         // No reintentar si son credenciales incorrectas
         if (errorMsg.contains('CREDENTIALS_ERROR')) {
           print('🚫 Credenciales incorrectas, no se reintentará');
           rethrow;
         }
-        
+
         // Manejo especial del error 429 (rate limiting)
         if (errorMsg.contains('429')) {
-          print('⏸️ Rate limit alcanzado (429) - Esperando 3 segundos antes de reintentar...');
+          print(
+            '⏸️ Rate limit alcanzado (429) - Esperando 3 segundos antes de reintentar...',
+          );
           await Future.delayed(const Duration(seconds: 3));
           if (!isLastAttempt) continue;
         }
-        
+
         if (isLastAttempt) {
           print('❌ $operationName falló después de $maxAttempts intentos: $e');
           rethrow;
         }
-        
+
         // Backoff más largo para login (cold start de Render puede tardar mucho)
-        final waitTime = isLogin 
-            ? Duration(seconds: 8 * attempt) // 8s, 16s, 24s para login (total: 60+8+16=84s máx)
-            : Duration(seconds: 2 * attempt); // 2s, 4s, 8s para operaciones normales
-        
-        final timeoutMsg = errorMsg.contains('TIMEOUT') ? '⏱️ Timeout - Render despertando' : '🔌 Error de conexión';
+        final waitTime = isLogin
+            ? Duration(
+                seconds: 8 * attempt,
+              ) // 8s, 16s, 24s para login (total: 60+8+16=84s máx)
+            : Duration(
+                seconds: 2 * attempt,
+              ); // 2s, 4s, 8s para operaciones normales
+
+        final timeoutMsg = errorMsg.contains('TIMEOUT')
+            ? '⏱️ Timeout - Render despertando'
+            : '🔌 Error de conexión';
         print('⏳ Reintentando en ${waitTime.inSeconds}s... ($timeoutMsg)');
         await Future.delayed(waitTime);
       }
     }
     return null;
   }
-  
+
   // 🏥 HEALTH CHECK: Verificar si el backend está activo
   static Future<Map<String, dynamic>> checkBackendHealth() async {
     try {
       final url = Uri.parse('$baseUrl/health');
       print('🏥 Verificando salud del backend: $url');
-      
+
       final startTime = DateTime.now();
       final response = await http.get(url).timeout(shortTimeout);
       final responseTime = DateTime.now().difference(startTime).inMilliseconds;
-      
+
       final isHealthy = response.statusCode == 200;
-      
+
       return {
         'healthy': isHealthy,
         'statusCode': response.statusCode,
         'responseTime': responseTime,
-        'message': isHealthy 
-          ? '✅ Backend activo (${responseTime}ms)' 
-          : '⚠️ Backend responde con error ${response.statusCode}',
+        'message': isHealthy
+            ? '✅ Backend activo (${responseTime}ms)'
+            : '⚠️ Backend responde con error ${response.statusCode}',
       };
     } catch (e) {
       print('❌ Health check falló: $e');
-      
+
       // Detectar tipo de error
       final isColdStart = e.toString().contains('TimeoutException');
-      
+
       return {
         'healthy': false,
         'statusCode': 0,
         'responseTime': -1,
-        'message': isColdStart 
-          ? '❄️ Backend iniciando (cold start Render)...' 
-          : '❌ Backend no disponible: $e',
+        'message': isColdStart
+            ? '❄️ Backend iniciando (cold start Render)...'
+            : '❌ Backend no disponible: $e',
         'coldStart': isColdStart,
       };
     }
   }
-  
+
   // 🔑 LOGIN CON JWT - VERSIÓN ROBUSTA CON REINTENTOS (MATRÍCULA + CONTRASEÑA)
-  static Future<Map<String, dynamic>?> login(String matricula, String password) async {
+  static Future<Map<String, dynamic>?> login(
+    String matricula,
+    String password,
+  ) async {
     return await _retryWithBackoff<Map<String, dynamic>>(
       () => _performLogin(matricula, password),
       operationName: 'login',
-      isLogin: true, // Usar tiempos de espera más largos para cold start de Render
+      isLogin:
+          true, // Usar tiempos de espera más largos para cold start de Render
     );
   }
-  
+
   // 🔐 IMPLEMENTACIÓN INTERNA DE LOGIN
-  static Future<Map<String, dynamic>> _performLogin(String matricula, String password) async {
+  static Future<Map<String, dynamic>> _performLogin(
+    String matricula,
+    String password,
+  ) async {
     final startTime = DateTime.now();
-    
+
     try {
       final url = Uri.parse('$baseUrl/auth/login');
-      final body = {
-        'matricula': matricula,
-        'password': password,
-      };
-      
+      final body = {'matricula': matricula, 'password': password};
+
       print('🔍 LOGIN REQUEST: $url');
       print('🎓 Matrícula: $matricula');
-      
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      ).timeout(
-        longTimeout,
-        onTimeout: () {
-          throw Exception('TIMEOUT: El servidor tardó más de ${longTimeout.inSeconds}s en responder. Posible cold start de Render.');
-        },
-      );
-      
+
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(
+            longTimeout,
+            onTimeout: () {
+              throw Exception(
+                'TIMEOUT: El servidor tardó más de ${longTimeout.inSeconds}s en responder. Posible cold start de Render.',
+              );
+            },
+          );
+
       final responseTime = DateTime.now().difference(startTime).inMilliseconds;
       print('📊 LOGIN RESPONSE: ${response.statusCode} (${responseTime}ms)');
-      
+
       // Detectar si fue cold start (respuesta lenta)
       final wasColdStart = responseTime > 10000;
       if (wasColdStart) {
         print('❄️ Cold start detectado: ${responseTime}ms');
       }
-      
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        
+
         if (data['success'] == true && data['token'] != null) {
           print('✅ Login exitoso');
           return {
@@ -163,22 +187,25 @@ class ApiService {
             'coldStart': wasColdStart,
           };
         } else {
-          throw Exception('INVALID_RESPONSE: Respuesta del servidor sin token válido');
+          throw Exception(
+            'INVALID_RESPONSE: Respuesta del servidor sin token válido',
+          );
         }
       } else if (response.statusCode == 401) {
         // Credenciales incorrectas - NO reintentar
         throw Exception('CREDENTIALS_ERROR: ${response.body}');
       } else if (response.statusCode == 500) {
         // Error del servidor - SÍ reintentar
-        throw Exception('SERVER_ERROR: Error interno del servidor (${response.statusCode})');
+        throw Exception(
+          'SERVER_ERROR: Error interno del servidor (${response.statusCode})',
+        );
       } else {
         throw Exception('HTTP_ERROR: Status code ${response.statusCode}');
       }
-      
     } catch (e) {
       final errorType = _classifyError(e);
       print('❌ LOGIN ERROR: $errorType - $e');
-      
+
       // Si es error de credenciales, no reintentar
       if (errorType == 'CREDENTIALS_ERROR') {
         return {
@@ -187,37 +214,47 @@ class ApiService {
           'message': 'Credenciales incorrectas. Verifica tu email y matrícula.',
         };
       }
-      
+
       // Para otros errores, propagar para que el retry maneje
       rethrow;
     }
   }
-  
+
   // 🏷️ CLASIFICAR TIPO DE ERROR
   static String _classifyError(dynamic error) {
     final errorStr = error.toString();
-    
+
     if (errorStr.contains('CREDENTIALS_ERROR')) return 'CREDENTIALS_ERROR';
     if (errorStr.contains('TIMEOUT')) return 'TIMEOUT_ERROR';
-    if (errorStr.contains('SocketException') || errorStr.contains('NetworkException')) return 'NETWORK_ERROR';
+    if (errorStr.contains('SocketException') ||
+        errorStr.contains('NetworkException'))
+      return 'NETWORK_ERROR';
     if (errorStr.contains('SERVER_ERROR')) return 'SERVER_ERROR';
     if (errorStr.contains('FormatException')) return 'PARSE_ERROR';
-    
+
     return 'UNKNOWN_ERROR';
   }
-  
+
   // 📝 REGISTRO CON VALIDACIÓN DE CARNET EXISTENTE - CON REINTENTOS
-  static Future<Map<String, dynamic>?> register(String email, String matricula, String password) async {
+  static Future<Map<String, dynamic>?> register(
+    String email,
+    String matricula,
+    String password,
+  ) async {
     return await _retryWithBackoff<Map<String, dynamic>>(
       () => _performRegister(email, matricula, password),
       operationName: 'registro',
     );
   }
-  
+
   // 📝 IMPLEMENTACIÓN INTERNA DE REGISTRO
-  static Future<Map<String, dynamic>> _performRegister(String email, String matricula, String password) async {
+  static Future<Map<String, dynamic>> _performRegister(
+    String email,
+    String matricula,
+    String password,
+  ) async {
     final startTime = DateTime.now();
-    
+
     try {
       final url = Uri.parse('$baseUrl/auth/register');
       final body = {
@@ -225,27 +262,31 @@ class ApiService {
         'matricula': matricula,
         'password': password,
       };
-      
+
       print('🔍 REGISTER REQUEST: $url');
       print('📧 Email: $email | 🎓 Matrícula: $matricula');
-      
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      ).timeout(
-        normalTimeout,
-        onTimeout: () {
-          throw Exception('TIMEOUT: El servidor tardó más de ${normalTimeout.inSeconds}s en responder.');
-        },
-      );
-      
+
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(
+            normalTimeout,
+            onTimeout: () {
+              throw Exception(
+                'TIMEOUT: El servidor tardó más de ${normalTimeout.inSeconds}s en responder.',
+              );
+            },
+          );
+
       final responseTime = DateTime.now().difference(startTime).inMilliseconds;
       print('📊 REGISTER RESPONSE: ${response.statusCode} (${responseTime}ms)');
-      
+
       if (response.statusCode == 201 || response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        
+
         if (data['success'] == true) {
           print('✅ Registro exitoso');
           return {
@@ -254,13 +295,15 @@ class ApiService {
             'responseTime': responseTime,
           };
         } else {
-          throw Exception('INVALID_RESPONSE: Respuesta del servidor sin éxito confirmado');
+          throw Exception(
+            'INVALID_RESPONSE: Respuesta del servidor sin éxito confirmado',
+          );
         }
       } else if (response.statusCode == 404) {
         // Carnet no encontrado o correo/matrícula no coinciden
         final data = jsonDecode(response.body);
         final errorType = data['errorType'] ?? 'NOT_FOUND';
-        
+
         return {
           'success': false,
           'errorType': errorType,
@@ -283,20 +326,21 @@ class ApiService {
         };
       } else if (response.statusCode == 500) {
         // Error del servidor - SÍ reintentar
-        throw Exception('SERVER_ERROR: Error interno del servidor (${response.statusCode})');
+        throw Exception(
+          'SERVER_ERROR: Error interno del servidor (${response.statusCode})',
+        );
       } else {
         throw Exception('HTTP_ERROR: Status code ${response.statusCode}');
       }
-      
     } catch (e) {
       final errorType = _classifyError(e);
       print('❌ REGISTER ERROR: $errorType - $e');
-      
+
       // Propagar para que el retry maneje
       rethrow;
     }
   }
-  
+
   // 🎓 OBTENER DATOS DEL CARNET CON JWT - CON REINTENTOS
   static Future<CarnetModel?> getMyCarnet(String token) async {
     return await _retryWithBackoff<CarnetModel>(
@@ -304,45 +348,49 @@ class ApiService {
       operationName: 'obtener carnet',
     );
   }
-  
+
   // 🔐 IMPLEMENTACIÓN INTERNA DE GET CARNET
   static Future<CarnetModel> _performGetCarnet(String token) async {
     try {
       final url = Uri.parse('$baseUrl/me/carnet');
-      
+
       print('🔍 GET CARNET REQUEST: $url');
       print('🔑 TOKEN: ${token.substring(0, min(20, token.length))}...');
-      
-      final response = await http.get(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      ).timeout(
-        normalTimeout,
-        onTimeout: () {
-          throw Exception('TIMEOUT: Timeout obteniendo carnet');
-        },
-      );
-      
+
+      final response = await http
+          .get(
+            url,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(
+            normalTimeout,
+            onTimeout: () {
+              throw Exception('TIMEOUT: Timeout obteniendo carnet');
+            },
+          );
+
       print('📊 CARNET RESPONSE: ${response.statusCode}');
-      
+
       // Manejo específico del error 429 (rate limiting)
       if (response.statusCode == 429) {
         print('⏸️ Error 429: Rate limit alcanzado - Demasiadas peticiones');
         throw Exception('HTTP_ERROR_429: ${response.body}');
       }
-      
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         print('📋 RESPONSE DATA: ${data}');
-        
+
         if (data['success'] == true && data['data'] != null) {
           print('✅ Carnet obtenido exitosamente');
           return CarnetModel.fromJson(data['data']);
         } else {
-          throw Exception('INVALID_RESPONSE: Respuesta sin datos de carnet válidos');
+          throw Exception(
+            'INVALID_RESPONSE: Respuesta sin datos de carnet válidos',
+          );
         }
       } else if (response.statusCode == 401 || response.statusCode == 403) {
         print('🚫 Token inválido detectado - limpiando sesión');
@@ -354,20 +402,201 @@ class ApiService {
       } else {
         throw Exception('HTTP_ERROR: Status code ${response.statusCode}');
       }
-      
     } catch (e) {
       print('❌ GET CARNET ERROR: $e');
       rethrow; // Propagar para que el retry maneje
     }
   }
-  
+
   // 🏥 OBTENER CITAS MÉDICAS - ENDPOINT REAL SASU
+  static Future<Map<String, dynamic>> uploadCarnetPhoto(
+    String token,
+    Uint8List bytes, {
+    required String fileName,
+    required String mimeType,
+  }) async {
+    final url = Uri.parse('$baseUrl/me/carnet/foto');
+    final mediaType = _mediaTypeFromMime(mimeType);
+
+    print('📸 UPLOAD FOTO CARNET REQUEST: $url');
+    print('📸 Archivo: $fileName | MIME: $mimeType | bytes: ${bytes.length}');
+
+    final request = http.MultipartRequest('POST', url)
+      ..headers['Authorization'] = 'Bearer $token'
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: fileName,
+          contentType: mediaType,
+        ),
+      );
+
+    final streamed = await request.send().timeout(
+      normalTimeout,
+      onTimeout: () {
+        throw Exception('TIMEOUT: Timeout subiendo fotografía');
+      },
+    );
+    final response = await http.Response.fromStream(streamed);
+
+    print('📸 UPLOAD FOTO RESPONSE: ${response.statusCode}');
+    if (response.body.isNotEmpty) {
+      print('📋 RESPONSE BODY: ${response.body}');
+    }
+
+    final data = _decodeJsonObject(response.body);
+
+    if (response.statusCode == 200 && data['success'] == true) {
+      return data;
+    }
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      throw Exception('INVALID_TOKEN: Token inválido');
+    }
+
+    return {
+      'success': false,
+      'statusCode': response.statusCode,
+      'message': data['message'] ?? 'No se pudo subir la fotografía',
+      'storagePending': response.statusCode == 501,
+    };
+  }
+
+  static Future<Map<String, dynamic>> removeCarnetPhoto(String token) async {
+    final url = Uri.parse('$baseUrl/me/carnet/foto');
+
+    final response = await http
+        .delete(
+          url,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+        )
+        .timeout(
+          normalTimeout,
+          onTimeout: () {
+            throw Exception('TIMEOUT: Timeout quitando fotografía');
+          },
+        );
+
+    final data = _decodeJsonObject(response.body);
+
+    if (response.statusCode == 200 && data['success'] == true) {
+      return data;
+    }
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      throw Exception('INVALID_TOKEN: Token inválido');
+    }
+
+    return {
+      'success': false,
+      'statusCode': response.statusCode,
+      'message': data['message'] ?? 'No se pudo quitar la fotografía',
+    };
+  }
+
+  static Future<Uint8List?> getCarnetPhotoBytes(
+    String token, {
+    String? fallbackUrl,
+  }) async {
+    final url = Uri.parse('$baseUrl/me/carnet/foto');
+
+    final response = await http
+        .get(url, headers: {'Authorization': 'Bearer $token'})
+        .timeout(
+          normalTimeout,
+          onTimeout: () {
+            throw Exception('TIMEOUT: Timeout cargando fotografía');
+          },
+        );
+
+    if (response.statusCode == 200) {
+      final bytes = _photoBytesFromResponse(response);
+      if (bytes != null) return bytes;
+
+      final fallbackBytes = await _getPhotoBytesFromUrl(fallbackUrl);
+      if (fallbackBytes != null) return fallbackBytes;
+
+      throw Exception('INVALID_PHOTO_RESPONSE: MIME no permitido');
+    }
+
+    if (response.statusCode == 404) {
+      return _getPhotoBytesFromUrl(fallbackUrl);
+    }
+
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      throw Exception('INVALID_TOKEN: Token inválido');
+    }
+
+    final fallbackBytes = await _getPhotoBytesFromUrl(fallbackUrl);
+    if (fallbackBytes != null) return fallbackBytes;
+
+    throw Exception('PHOTO_LOAD_ERROR: Status code ${response.statusCode}');
+  }
+
+  static Uint8List? _photoBytesFromResponse(http.Response response) {
+    final contentType = response.headers['content-type'] ?? '';
+    if (!contentType.toLowerCase().startsWith('image/')) return null;
+    if (response.bodyBytes.isEmpty) return null;
+    return response.bodyBytes;
+  }
+
+  static Future<Uint8List?> _getPhotoBytesFromUrl(String? fotoUrl) async {
+    final cleanUrl = fotoUrl?.trim();
+    if (cleanUrl == null || cleanUrl.isEmpty) return null;
+
+    if (cleanUrl.startsWith('data:image/')) {
+      final separatorIndex = cleanUrl.indexOf(',');
+      if (separatorIndex <= 0) return null;
+
+      try {
+        return base64Decode(cleanUrl.substring(separatorIndex + 1));
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final uri = Uri.tryParse(cleanUrl);
+    if (uri == null || !uri.hasScheme) return null;
+    if (uri.scheme != 'http' && uri.scheme != 'https') return null;
+
+    try {
+      final response = await http.get(uri).timeout(normalTimeout);
+      return _photoBytesFromResponse(response);
+    } catch (e) {
+      print('⚠️ No se pudo cargar foto desde URL firmada: $e');
+      return null;
+    }
+  }
+
+  static MediaType _mediaTypeFromMime(String mimeType) {
+    final parts = mimeType.split('/');
+    if (parts.length == 2 && parts.first.isNotEmpty && parts.last.isNotEmpty) {
+      return MediaType(parts.first, parts.last);
+    }
+    return MediaType('application', 'octet-stream');
+  }
+
+  static Map<String, dynamic> _decodeJsonObject(String body) {
+    if (body.trim().isEmpty) return {};
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) return decoded;
+      return {};
+    } catch (_) {
+      return {};
+    }
+  }
+
   static Future<List<CitaModel>> getCitas(String token) async {
     try {
       final url = Uri.parse('$baseUrl/me/citas'); // ✅ ENDPOINT CORRECTO
-      
+
       print('🔍 GET CITAS REQUEST: $url');
-      
+
       final response = await http.get(
         url,
         headers: {
@@ -375,15 +604,15 @@ class ApiService {
           'Content-Type': 'application/json',
         },
       );
-      
+
       print('📊 CITAS RESPONSE: ${response.statusCode}');
       print('📋 RESPONSE BODY: ${response.body}');
-      
+
       if (response.statusCode == 429) {
         print('⏸️ Error 429: Rate limit alcanzado en citas');
         throw Exception('HTTP_ERROR_429: ${response.body}');
       }
-      
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true && data['data'] != null) {
@@ -391,7 +620,7 @@ class ApiService {
           return citasJson.map((json) => CitaModel.fromJson(json)).toList();
         }
       }
-      
+
       return [];
     } catch (e) {
       print('❌ GET CITAS ERROR: $e');
@@ -403,25 +632,27 @@ class ApiService {
   static Future<Map<String, dynamic>> deleteCitasPasadas(String token) async {
     try {
       final url = Uri.parse('$baseUrl/me/citas/pasadas');
-      
+
       print('🔍 DELETE CITAS PASADAS REQUEST: $url');
-      
-      final response = await http.delete(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      ).timeout(
-        normalTimeout,
-        onTimeout: () {
-          throw Exception('TIMEOUT: Timeout eliminando citas pasadas');
-        },
-      );
-      
+
+      final response = await http
+          .delete(
+            url,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(
+            normalTimeout,
+            onTimeout: () {
+              throw Exception('TIMEOUT: Timeout eliminando citas pasadas');
+            },
+          );
+
       print('📊 DELETE CITAS RESPONSE: ${response.statusCode}');
       print('📋 RESPONSE BODY: ${response.body}');
-      
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return {
@@ -442,7 +673,6 @@ class ApiService {
           'message': 'Error eliminando citas pasadas',
         };
       }
-      
     } catch (e) {
       print('❌ DELETE CITAS PASADAS ERROR: $e');
       return {
@@ -454,14 +684,17 @@ class ApiService {
   }
 
   // 🏥 OBTENER PROMOCIONES DE SALUD ACTIVAS - BACKEND REAL
-  static Future<List<PromocionSaludModel>> getPromocionesSalud(String token, String matricula) async {
+  static Future<List<PromocionSaludModel>> getPromocionesSalud(
+    String token,
+    String matricula,
+  ) async {
     try {
       // Endpoint del nuevo backend de promociones SASU
       final url = Uri.parse('$baseUrl/me/promociones');
-      
+
       print('🔍 PROMOCIONES REQUEST: $url');
       print('🎓 MATRICULA: $matricula');
-      
+
       final response = await http.get(
         url,
         headers: {
@@ -469,27 +702,29 @@ class ApiService {
           'Content-Type': 'application/json',
         },
       );
-      
+
       print('📊 PROMOCIONES RESPONSE: ${response.statusCode}');
       print('📋 RESPONSE BODY: ${response.body}');
-      
+
       if (response.statusCode == 429) {
         print('⏸️ Error 429: Rate limit alcanzado en promociones');
         throw Exception('HTTP_ERROR_429: ${response.body}');
       }
-      
+
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
-        
+
         // Verificar formato de respuesta del backend
         if (responseData['success'] == true && responseData['data'] != null) {
           final List<dynamic> promocionesJson = responseData['data'];
-          
-          print('📦 ${promocionesJson.length} promociones recibidas del backend');
-          
+
+          print(
+            '📦 ${promocionesJson.length} promociones recibidas del backend',
+          );
+
           // Convertir JSON a modelos
           final promociones = <PromocionSaludModel>[];
-          
+
           for (var json in promocionesJson) {
             try {
               // Mapear formato del backend SASU al modelo existente
@@ -502,12 +737,18 @@ class ApiService {
                 'programa': json['titulo'] ?? json['programa'] ?? 'Sin título',
                 'destinatario': 'Alumno',
                 'autorizado': true,
-                'createdAt': json['fecha_publicacion'] ?? json['created_at'] ?? DateTime.now().toIso8601String(),
+                'createdAt':
+                    json['fecha_publicacion'] ??
+                    json['created_at'] ??
+                    DateTime.now().toIso8601String(),
                 'createdBy': json['departamento'] ?? 'Sistema SASU',
                 // Campos adicionales para compatibilidad
                 'titulo': json['titulo'] ?? '',
                 'descripcion': json['descripcion'] ?? '',
-                'resumen': json['resumen'] ?? json['descripcion']?.substring(0, 150) ?? '',
+                'resumen':
+                    json['resumen'] ??
+                    json['descripcion']?.substring(0, 150) ??
+                    '',
                 'imagen_url': json['imagen_url'],
                 'fecha_inicio': json['fecha_inicio'],
                 'fecha_fin': json['fecha_fin'],
@@ -516,25 +757,22 @@ class ApiService {
                 'prioridad': json['prioridad'] ?? 5,
                 'es_especifica': json['matricula_target'] != null,
               };
-              
+
               final promocion = PromocionSaludModel.fromJson(promocionData);
               promociones.add(promocion);
-              
+
               print('   ✅ ${promocion.titulo} (${promocion.categoria})');
-              
             } catch (e) {
               print('   ❌ Error parseando promoción: $e');
               print('   📄 JSON: $json');
             }
           }
-          
+
           print('✅ PROMOCIONES FINALES: ${promociones.length}');
           return promociones;
-          
         } else {
           print('❌ Formato de respuesta inválido: ${responseData}');
         }
-        
       } else if (response.statusCode == 404) {
         print('❌ Endpoint de promociones no encontrado (404)');
         print('💡 Asegúrate de que el backend SASU está ejecutándose');
@@ -543,7 +781,7 @@ class ApiService {
       } else {
         print('❌ Error ${response.statusCode}: ${response.body}');
       }
-      
+
       return [];
     } catch (e) {
       print('❌ GET PROMOCIONES ERROR: $e');
@@ -552,12 +790,15 @@ class ApiService {
   }
 
   // � REGISTRAR CLICK EN PROMOCIÓN
-  static Future<bool> registrarClickPromocion(String token, String promocionId) async {
+  static Future<bool> registrarClickPromocion(
+    String token,
+    String promocionId,
+  ) async {
     try {
       final url = Uri.parse('$baseUrl/me/promociones/$promocionId/click');
-      
+
       print('🔍 REGISTRAR CLICK: $url');
-      
+
       final response = await http.post(
         url,
         headers: {
@@ -565,15 +806,15 @@ class ApiService {
           'Content-Type': 'application/json',
         },
       );
-      
+
       print('📊 CLICK RESPONSE: ${response.statusCode}');
-      
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         print('✅ Click registrado: ${data['message']}');
         return true;
       }
-      
+
       return false;
     } catch (e) {
       print('❌ REGISTRAR CLICK ERROR: $e');
@@ -582,7 +823,10 @@ class ApiService {
   }
 
   // 🗑️ MARCAR PROMOCIÓN COMO VISTA (DEPRECADO)
-  static Future<bool> marcarPromocionVista(String token, String promocionId) async {
+  static Future<bool> marcarPromocionVista(
+    String token,
+    String promocionId,
+  ) async {
     // Este método está deprecado, usar registrarClickPromocion en su lugar
     return registrarClickPromocion(token, promocionId);
   }
@@ -601,37 +845,41 @@ class ApiService {
   static Future<List<VacunaModel>> _performGetVacunas(String token) async {
     try {
       final url = Uri.parse('$baseUrl/me/vacunas');
-      
+
       print('🔍 GET VACUNAS REQUEST: $url');
       print('🔑 TOKEN: ${token.substring(0, 20)}...');
-      
-      final response = await http.get(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      ).timeout(
-        normalTimeout,
-        onTimeout: () {
-          throw Exception('TIMEOUT: Timeout obteniendo vacunas');
-        },
-      );
-      
+
+      final response = await http
+          .get(
+            url,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(
+            normalTimeout,
+            onTimeout: () {
+              throw Exception('TIMEOUT: Timeout obteniendo vacunas');
+            },
+          );
+
       print('📊 VACUNAS RESPONSE: ${response.statusCode}');
       print('📋 RESPONSE BODY: ${response.body}');
-      
+
       if (response.statusCode == 429) {
         print('⏸️ Error 429: Rate limit alcanzado en vacunas');
         throw Exception('HTTP_ERROR_429: ${response.body}');
       }
-      
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        
+
         if (data['success'] == true && data['data'] != null) {
           final List<dynamic> vacunasJson = data['data'];
-          final vacunas = vacunasJson.map((json) => VacunaModel.fromJson(json)).toList();
+          final vacunas = vacunasJson
+              .map((json) => VacunaModel.fromJson(json))
+              .toList();
           print('✅ VACUNAS OBTENIDAS: ${vacunas.length} registros');
           return vacunas;
         } else {
@@ -648,19 +896,19 @@ class ApiService {
         print('❌ ERROR HTTP: ${response.statusCode}');
         return [];
       }
-      
     } catch (e) {
       print('❌ GET VACUNAS ERROR: $e');
-      
+
       // Si es error de token, propagarlo
       if (e.toString().contains('INVALID_TOKEN')) {
         rethrow;
       }
-      
+
       // Para otros errores, retornar lista vacía
       return [];
     }
   }
+
   // 📋 OBTENER CONSULTAS DE ATENCIÓN DEL ESTUDIANTE - CON REINTENTOS
   static Future<List<ConsultaModel>> getConsultas(String token) async {
     final result = await _retryWithBackoff<List<ConsultaModel>>(
@@ -675,37 +923,43 @@ class ApiService {
   static Future<List<ConsultaModel>> _performGetConsultas(String token) async {
     try {
       final url = Uri.parse('$baseUrl/me/consultas');
-      
+
       print('🔍 GET CONSULTAS REQUEST: $url');
       print('🔑 TOKEN: ${token.substring(0, 20)}...');
-      
-      final response = await http.get(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      ).timeout(
-        normalTimeout,
-        onTimeout: () {
-          throw Exception('TIMEOUT: Timeout obteniendo consultas de atención');
-        },
-      );
-      
+
+      final response = await http
+          .get(
+            url,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(
+            normalTimeout,
+            onTimeout: () {
+              throw Exception(
+                'TIMEOUT: Timeout obteniendo consultas de atención',
+              );
+            },
+          );
+
       print('📊 CONSULTAS RESPONSE: ${response.statusCode}');
       print('📋 RESPONSE BODY: ${response.body}');
-      
+
       if (response.statusCode == 429) {
         print('⏸️ Error 429: Rate limit alcanzado en consultas');
         throw Exception('HTTP_ERROR_429: ${response.body}');
       }
-      
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        
+
         if (data['success'] == true && data['data'] != null) {
           final List<dynamic> consultasJson = data['data'];
-          final consultas = consultasJson.map((json) => ConsultaModel.fromJson(json)).toList();
+          final consultas = consultasJson
+              .map((json) => ConsultaModel.fromJson(json))
+              .toList();
           print('✅ CONSULTAS OBTENIDAS: ${consultas.length} registros');
           return consultas;
         } else {
@@ -722,15 +976,14 @@ class ApiService {
         print('❌ ERROR HTTP: ${response.statusCode}');
         return [];
       }
-      
     } catch (e) {
       print('❌ GET CONSULTAS ERROR: $e');
-      
+
       // Si es error de token, propagarlo
       if (e.toString().contains('INVALID_TOKEN')) {
         rethrow;
       }
-      
+
       // Para otros errores, retornar lista vacía
       return [];
     }
@@ -762,19 +1015,21 @@ class ApiService {
       print('📦 RESPONSE BODY LENGTH: ${response.body.length} bytes');
 
       if (response.statusCode == 200) {
-        print('📋 RESPONSE BODY: ${response.body.substring(0, response.body.length > 500 ? 500 : response.body.length)}...');
-        
+        print(
+          '📋 RESPONSE BODY: ${response.body.substring(0, response.body.length > 500 ? 500 : response.body.length)}...',
+        );
+
         final data = jsonDecode(response.body);
         print('🔍 PARSED DATA KEYS: ${data.keys.toList()}');
         print('🔍 data["success"]: ${data['success']}');
         print('🔍 data["data"]: ${data['data'] != null ? "EXISTS" : "NULL"}');
         print('🔍 data["id"]: ${data['id']}');
         print('🔍 data["matricula"]: ${data['matricula']}');
-        
+
         // Manejar dos formatos de respuesta:
         // Formato 1: {"success": true, "data": {...alebrije...}}
         // Formato 2: {...alebrije directo...}
-        
+
         if (data['success'] == true && data['data'] != null) {
           // Formato con wrapper
           print('✅ Alebrije cargado desde backend (formato wrapper)');
@@ -786,7 +1041,7 @@ class ApiService {
           print('   - Matrícula: ${data['matricula']}');
           return data as Map<String, dynamic>;
         }
-        
+
         print('⚠️ Backend devolvió 200 pero formato no reconocido');
         print('   Contenido completo: ${response.body}');
         return null;
@@ -806,91 +1061,91 @@ class ApiService {
   }
 
   /// POST /me/alebrije - Crear nuevo alebrije
-  static Future<bool> createAlebrije(String token, Map<String, dynamic> alebrijeData) async {
-    final result = await _retryWithBackoff(
-      () async {
-        print('📤 ENVIANDO ALEBRIJE A BACKEND:');
-        print('   - Nombre: ${alebrijeData['nombre']}');
-        print('   - Especie: ${alebrijeData['dna']?['especieBase']}');
-        
-        final response = await http
-            .post(
-              Uri.parse('$baseUrl/me/alebrije'),
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer $token',
-              },
-              body: jsonEncode(alebrijeData),
-            )
-            .timeout(
-              normalTimeout,
-              onTimeout: () {
-                throw Exception('TIMEOUT: Timeout creando alebrije');
-              },
-            );
+  static Future<bool> createAlebrije(
+    String token,
+    Map<String, dynamic> alebrijeData,
+  ) async {
+    final result = await _retryWithBackoff(() async {
+      print('📤 ENVIANDO ALEBRIJE A BACKEND:');
+      print('   - Nombre: ${alebrijeData['nombre']}');
+      print('   - Especie: ${alebrijeData['dna']?['especieBase']}');
 
-        print('🎨 ALEBRIJE CREATE RESPONSE: ${response.statusCode}');
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/me/alebrije'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode(alebrijeData),
+          )
+          .timeout(
+            normalTimeout,
+            onTimeout: () {
+              throw Exception('TIMEOUT: Timeout creando alebrije');
+            },
+          );
 
-        if (response.statusCode == 200 || response.statusCode == 201) {
-          print('✅ Alebrije creado en backend');
-          return true;
-        } else if (response.statusCode == 401 || response.statusCode == 403) {
-          throw Exception('INVALID_TOKEN: Token inválido');
-        } else {
-          print('⚠️ Error creando alebrije: ${response.statusCode}');
-          print('📋 RESPONSE BODY: ${response.body}');
-          return false;
-        }
-      },
-      operationName: 'CREATE alebrije',
-    );
+      print('🎨 ALEBRIJE CREATE RESPONSE: ${response.statusCode}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        print('✅ Alebrije creado en backend');
+        return true;
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        throw Exception('INVALID_TOKEN: Token inválido');
+      } else {
+        print('⚠️ Error creando alebrije: ${response.statusCode}');
+        print('📋 RESPONSE BODY: ${response.body}');
+        return false;
+      }
+    }, operationName: 'CREATE alebrije');
     return result ?? false;
   }
 
   /// PUT /me/alebrije - Actualizar alebrije existente
-  static Future<bool> updateAlebrije(String token, Map<String, dynamic> alebrijeData) async {
-    final result = await _retryWithBackoff(
-      () async {
-        print('📤 ENVIANDO ACTUALIZACIÓN DE ALEBRIJE:');
-        print('   - Nombre: ${alebrijeData['nombre']}');
-        print('   - Nivel: ${alebrijeData['nivelEvolucion']}');
-        print('   - XP: ${alebrijeData['puntosExperiencia']}');
-        print('   - Hambre: ${alebrijeData['estado']?['hambre']}');
-        print('   - Felicidad: ${alebrijeData['estado']?['felicidad']}');
-        
-        final response = await http
-            .put(
-              Uri.parse('$baseUrl/me/alebrije'),
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer $token',
-              },
-              body: jsonEncode(alebrijeData),
-            )
-            .timeout(
-              normalTimeout,
-              onTimeout: () {
-                throw Exception('TIMEOUT: Timeout actualizando alebrije');
-              },
-            );
+  static Future<bool> updateAlebrije(
+    String token,
+    Map<String, dynamic> alebrijeData,
+  ) async {
+    final result = await _retryWithBackoff(() async {
+      print('📤 ENVIANDO ACTUALIZACIÓN DE ALEBRIJE:');
+      print('   - Nombre: ${alebrijeData['nombre']}');
+      print('   - Nivel: ${alebrijeData['nivelEvolucion']}');
+      print('   - XP: ${alebrijeData['puntosExperiencia']}');
+      print('   - Hambre: ${alebrijeData['estado']?['hambre']}');
+      print('   - Felicidad: ${alebrijeData['estado']?['felicidad']}');
 
-        print('🎨 ALEBRIJE UPDATE RESPONSE: ${response.statusCode}');
-        if (response.body.isNotEmpty) {
-          print('📋 RESPONSE BODY: ${response.body}');
-        }
+      final response = await http
+          .put(
+            Uri.parse('$baseUrl/me/alebrije'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode(alebrijeData),
+          )
+          .timeout(
+            normalTimeout,
+            onTimeout: () {
+              throw Exception('TIMEOUT: Timeout actualizando alebrije');
+            },
+          );
 
-        if (response.statusCode == 200) {
-          print('✅ Alebrije actualizado EXITOSAMENTE en backend');
-          return true;
-        } else if (response.statusCode == 401 || response.statusCode == 403) {
-          throw Exception('INVALID_TOKEN: Token inválido');
-        } else {
-          print('⚠️ Error actualizando alebrije: ${response.statusCode}');
-          return false;
-        }
-      },
-      operationName: 'UPDATE alebrije',
-    );
+      print('🎨 ALEBRIJE UPDATE RESPONSE: ${response.statusCode}');
+      if (response.body.isNotEmpty) {
+        print('📋 RESPONSE BODY: ${response.body}');
+      }
+
+      if (response.statusCode == 200) {
+        print('✅ Alebrije actualizado EXITOSAMENTE en backend');
+        return true;
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        throw Exception('INVALID_TOKEN: Token inválido');
+      } else {
+        print('⚠️ Error actualizando alebrije: ${response.statusCode}');
+        return false;
+      }
+    }, operationName: 'UPDATE alebrije');
     return result ?? false;
   }
 
@@ -909,10 +1164,7 @@ class ApiService {
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer $token',
               },
-              body: jsonEncode({
-                'tipo': tipo,
-                'cantidad': cantidad,
-              }),
+              body: jsonEncode({'tipo': tipo, 'cantidad': cantidad}),
             )
             .timeout(
               shortTimeout,
@@ -976,5 +1228,4 @@ class ApiService {
     );
     return result ?? false;
   }
-
 }

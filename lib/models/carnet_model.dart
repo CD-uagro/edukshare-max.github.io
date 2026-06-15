@@ -1,4 +1,6 @@
 // 🎓 MODELO DE DATOS - CARNET ESTUDIANTE UAGRO - BACKEND SASU COMPLETO
+// ignore_for_file: avoid_print
+
 class CarnetModel {
   final String id;
   final String matricula;
@@ -21,7 +23,8 @@ class CarnetModel {
   final String emergenciaTelefono;
   final String expedienteNotas;
   final String expedienteAdjuntos;
-  
+  final String? fotoUrl;
+
   // Campos técnicos de la base de datos (opcionales)
   final String? rid;
   final String? self;
@@ -51,6 +54,7 @@ class CarnetModel {
     required this.emergenciaTelefono,
     required this.expedienteNotas,
     required this.expedienteAdjuntos,
+    this.fotoUrl,
     this.rid,
     this.self,
     this.etag,
@@ -83,6 +87,19 @@ class CarnetModel {
       emergenciaTelefono: json['emergenciaTelefono'] ?? '',
       expedienteNotas: json['expedienteNotas'] ?? '',
       expedienteAdjuntos: json['expedienteAdjuntos'] ?? '',
+      fotoUrl:
+          json['fotoUrl'] ??
+          json['photoUrl'] ??
+          json['imagenUrl'] ??
+          json['imageUrl'] ??
+          json['avatarUrl'] ??
+          json['foto_url'] ??
+          json['photo_url'] ??
+          json['imagen_url'] ??
+          json['image_url'] ??
+          json['avatar_url'] ??
+          json['fotografia'] ??
+          json['foto'],
       rid: json['_rid'],
       self: json['_self'],
       etag: json['_etag'],
@@ -96,15 +113,27 @@ class CarnetModel {
   String get estado => categoria;
   String get telefono => emergenciaTelefono;
   String get contactoEmergencia => emergenciaContacto;
-  String get seguroMedico => usoSeguroUniversitario == 'Sí' ? unidadMedica : 'Sin seguro universitario';
+  String get seguroMedico => usoSeguroUniversitario == 'Sí'
+      ? unidadMedica
+      : 'Sin seguro universitario';
   String get email => correo;
-  
+
   // 🩺 GETTERS PARA INFORMACIÓN MÉDICA
-  bool get tieneEnfermedadCronica => enfermedadCronica.toLowerCase() != 'negadas' && enfermedadCronica.toLowerCase() != 'ninguna' && enfermedadCronica.isNotEmpty;
-  bool get tieneAlergias => alergias.toLowerCase() != 'negadas' && alergias.toLowerCase() != 'ninguna' && alergias.isNotEmpty;
-  bool get tieneDiscapacidad => discapacidad.toLowerCase() == 'sí' || discapacidad.toLowerCase() == 'si';
-  bool get esDonante => donante.toLowerCase() == 'sí' || donante.toLowerCase() == 'si';
-  bool get usaSeguroUniversitario => usoSeguroUniversitario.toLowerCase() == 'sí' || usoSeguroUniversitario.toLowerCase() == 'si';
+  bool get tieneEnfermedadCronica =>
+      enfermedadCronica.toLowerCase() != 'negadas' &&
+      enfermedadCronica.toLowerCase() != 'ninguna' &&
+      enfermedadCronica.isNotEmpty;
+  bool get tieneAlergias =>
+      alergias.toLowerCase() != 'negadas' &&
+      alergias.toLowerCase() != 'ninguna' &&
+      alergias.isNotEmpty;
+  bool get tieneDiscapacidad =>
+      discapacidad.toLowerCase() == 'sí' || discapacidad.toLowerCase() == 'si';
+  bool get esDonante =>
+      donante.toLowerCase() == 'sí' || donante.toLowerCase() == 'si';
+  bool get usaSeguroUniversitario =>
+      usoSeguroUniversitario.toLowerCase() == 'sí' ||
+      usoSeguroUniversitario.toLowerCase() == 'si';
 
   // 📄 CONVERTIR A JSON (para futuras funcionalidades)
   Map<String, dynamic> toJson() {
@@ -130,10 +159,68 @@ class CarnetModel {
       'emergenciaTelefono': emergenciaTelefono,
       'expedienteNotas': expedienteNotas,
       'expedienteAdjuntos': expedienteAdjuntos,
+      if (fotoUrl != null && fotoUrl!.trim().isNotEmpty) 'fotoUrl': fotoUrl,
     };
   }
 
   // 📄 PARA DEBUG
+  CarnetModel copyWith({
+    String? id,
+    String? matricula,
+    String? nombreCompleto,
+    String? correo,
+    int? edad,
+    String? sexo,
+    String? categoria,
+    String? programa,
+    String? tipoSangre,
+    String? enfermedadCronica,
+    String? unidadMedica,
+    String? numeroAfiliacion,
+    String? usoSeguroUniversitario,
+    String? donante,
+    String? emergenciaContacto,
+    String? discapacidad,
+    String? tipoDiscapacidad,
+    String? alergias,
+    String? emergenciaTelefono,
+    String? expedienteNotas,
+    String? expedienteAdjuntos,
+    String? fotoUrl,
+    bool clearFotoUrl = false,
+  }) {
+    return CarnetModel(
+      id: id ?? this.id,
+      matricula: matricula ?? this.matricula,
+      nombreCompleto: nombreCompleto ?? this.nombreCompleto,
+      correo: correo ?? this.correo,
+      edad: edad ?? this.edad,
+      sexo: sexo ?? this.sexo,
+      categoria: categoria ?? this.categoria,
+      programa: programa ?? this.programa,
+      tipoSangre: tipoSangre ?? this.tipoSangre,
+      enfermedadCronica: enfermedadCronica ?? this.enfermedadCronica,
+      unidadMedica: unidadMedica ?? this.unidadMedica,
+      numeroAfiliacion: numeroAfiliacion ?? this.numeroAfiliacion,
+      usoSeguroUniversitario:
+          usoSeguroUniversitario ?? this.usoSeguroUniversitario,
+      donante: donante ?? this.donante,
+      emergenciaContacto: emergenciaContacto ?? this.emergenciaContacto,
+      discapacidad: discapacidad ?? this.discapacidad,
+      tipoDiscapacidad: tipoDiscapacidad ?? this.tipoDiscapacidad,
+      alergias: alergias ?? this.alergias,
+      emergenciaTelefono: emergenciaTelefono ?? this.emergenciaTelefono,
+      expedienteNotas: expedienteNotas ?? this.expedienteNotas,
+      expedienteAdjuntos: expedienteAdjuntos ?? this.expedienteAdjuntos,
+      fotoUrl: clearFotoUrl ? null : (fotoUrl ?? this.fotoUrl),
+      rid: rid,
+      self: self,
+      etag: etag,
+      attachments: attachments,
+      ts: ts,
+    );
+  }
+
   @override
   String toString() {
     return 'CarnetModel(id: $id, matricula: $matricula, nombreCompleto: $nombreCompleto, programa: $programa, categoria: $categoria, edad: $edad, sexo: $sexo)';

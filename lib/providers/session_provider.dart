@@ -1,9 +1,13 @@
+// ignore_for_file: avoid_print, curly_braces_in_flow_control_structures
+
 // 🔐 PROVIDER DE SESIÓN - CON CACHÉ Y MANEJO ROBUSTO DE ERRORES
 // Estado global de la aplicación con persistencia local
 
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import 'package:carnet_digital_uagro/models/carnet_model.dart';
 import 'package:carnet_digital_uagro/models/cita_model.dart';
 import 'package:carnet_digital_uagro/models/promocion_salud_model.dart';
@@ -23,12 +27,20 @@ class SessionProvider extends ChangeNotifier {
   List<PromocionSaludModel> _promociones = [];
   List<VacunaModel> _vacunas = [];
   List<ConsultaModel> _consultas = [];
-  
+  Uint8List? _carnetPhotoBytes;
+  DateTime? _lastCarnetFetch;
+  DateTime? _lastCitasFetch;
+  DateTime? _lastPromocionesFetch;
+  DateTime? _lastVacunasFetch;
+  DateTime? _lastConsultasFetch;
+
+  static const Duration _dataCacheTtl = Duration(minutes: 5);
+
   // Estado del backend
   bool _backendHealthy = true;
   String? _backendMessage;
   int? _backendResponseTime;
-  
+
   // Diseño del carnet seleccionado
   String _carnetDesign = 'wallet'; // 'wallet' o 'modern'
 
@@ -43,6 +55,7 @@ class SessionProvider extends ChangeNotifier {
   List<PromocionSaludModel> get promociones => _promociones;
   List<VacunaModel> get vacunas => _vacunas;
   List<ConsultaModel> get consultas => _consultas;
+  Uint8List? get carnetPhotoBytes => _carnetPhotoBytes;
   bool get backendHealthy => _backendHealthy;
   String? get backendMessage => _backendMessage;
   int? get backendResponseTime => _backendResponseTime;
@@ -65,12 +78,41 @@ class SessionProvider extends ChangeNotifier {
     _errorType = type;
     notifyListeners();
   }
-  
+
   void _setBackendStatus(bool healthy, String? message, int? responseTime) {
     _backendHealthy = healthy;
     _backendMessage = message;
     _backendResponseTime = responseTime;
     notifyListeners();
+  }
+
+  bool _isFresh(DateTime? timestamp) {
+    if (timestamp == null) return false;
+    return DateTime.now().difference(timestamp) < _dataCacheTtl;
+  }
+
+  Future<void> _loadCarnetPhotoBytes({bool notifyWhenDone = false}) async {
+    if (_token == null || _token!.isEmpty || _token == 'DEMO_TOKEN') return;
+
+    final hasPhoto = (_carnet?.fotoUrl ?? '').trim().isNotEmpty;
+    if (!hasPhoto) {
+      _carnetPhotoBytes = null;
+      if (notifyWhenDone) notifyListeners();
+      return;
+    }
+
+    try {
+      final bytes = await ApiService.getCarnetPhotoBytes(
+        _token!,
+        fallbackUrl: _carnet?.fotoUrl,
+      );
+      _carnetPhotoBytes = bytes;
+      if (notifyWhenDone) notifyListeners();
+    } catch (e) {
+      print('⚠️ No se pudo cargar la fotografía del carnet: $e');
+      _carnetPhotoBytes = null;
+      if (notifyWhenDone) notifyListeners();
+    }
   }
 
   // 💾 RESTAURAR SESIÓN DESDE CACHÉ (llamar al iniciar app)
@@ -80,63 +122,64 @@ class SessionProvider extends ChangeNotifier {
       final cachedToken = prefs.getString(_keyToken);
       final cachedCarnetJson = prefs.getString(_keyCarnet);
       final loginTimestamp = prefs.getInt(_keyLoginTime);
-      
+
       // Restaurar preferencia de diseño
       _carnetDesign = prefs.getString(_keyCarnetDesign) ?? 'wallet';
-      
-      if (cachedToken == null || cachedCarnetJson == null || loginTimestamp == null) {
+
+      if (cachedToken == null ||
+          cachedCarnetJson == null ||
+          loginTimestamp == null) {
         print('📭 No hay sesión guardada');
         return false;
       }
-      
+
       // Verificar que el token no tenga más de 7 días
       final loginDate = DateTime.fromMillisecondsSinceEpoch(loginTimestamp);
       final daysSinceLogin = DateTime.now().difference(loginDate).inDays;
-      
+
       if (daysSinceLogin > 7) {
-        print('⏰ Sesión expirada (${daysSinceLogin} días)');
+        print('⏰ Sesión expirada ($daysSinceLogin días)');
         await clearCache();
         return false;
       }
-      
+
       // Restaurar datos
       _token = cachedToken;
       _carnet = CarnetModel.fromJson(jsonDecode(cachedCarnetJson));
       _isLoggedIn = true;
-      
+
       print('✅ Sesión restaurada: ${_carnet?.nombreCompleto}');
       print('🕐 Login hace $daysSinceLogin día(s)');
-      
-      // ⚠️ Cargar datos SECUENCIALMENTE para evitar 429
-      // NO cargar nada en background durante restauración de sesión
-      // Solo notificar que la sesión está lista
-      
+
       notifyListeners();
+      unawaited(_refreshRestoredSession());
       return true;
-      
     } catch (e) {
       print('❌ Error restaurando sesión: $e');
       await clearCache();
       return false;
     }
   }
-  
+
   // 💾 GUARDAR SESIÓN EN CACHÉ
   Future<void> _saveSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       if (_token != null && _carnet != null) {
         await prefs.setString(_keyToken, _token!);
         await prefs.setString(_keyCarnet, jsonEncode(_carnet!.toJson()));
-        await prefs.setInt(_keyLoginTime, DateTime.now().millisecondsSinceEpoch);
+        await prefs.setInt(
+          _keyLoginTime,
+          DateTime.now().millisecondsSinceEpoch,
+        );
         print('💾 Sesión guardada en caché');
       }
     } catch (e) {
       print('❌ Error guardando sesión: $e');
     }
   }
-  
+
   // 🗑️ LIMPIAR CACHÉ
   Future<void> clearCache() async {
     try {
@@ -164,6 +207,26 @@ class SessionProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> _refreshRestoredSession() async {
+    await _loadCarnetData(force: true, notifyWhenDone: true);
+    await _saveSession();
+    await _loadSecondaryDataInBackground();
+  }
+
+  Future<void> _loadSecondaryDataInBackground({bool force = false}) async {
+    if (_token == null || _token!.isEmpty || _token == 'DEMO_TOKEN') return;
+
+    await _loadCitasData(force: force);
+    await _loadVacunasData(force: force);
+    await _loadConsultasData(force: force);
+    await loadPromociones(
+      notifyWhenDone: false,
+      force: force,
+      showLoading: false,
+    );
+    notifyListeners();
+  }
+
   // 🔑 MÉTODO DE LOGIN CON REINTENTOS Y CACHÉ (MATRÍCULA + CONTRASEÑA)
   Future<bool> login(String matricula, String password) async {
     _setLoading(true);
@@ -171,85 +234,84 @@ class SessionProvider extends ChangeNotifier {
 
     try {
       final result = await ApiService.login(matricula, password);
-      
-      if (result != null && result['success'] == true && result['token'] != null) {
+
+      if (result != null &&
+          result['success'] == true &&
+          result['token'] != null) {
         _token = result['token'];
         _isLoggedIn = true;
-        
+
         // Mostrar info de cold start si aplica
         if (result['coldStart'] == true) {
-          print('❄️ Login completado después de cold start (${result['responseTime']}ms)');
+          print(
+            '❄️ Login completado después de cold start (${result['responseTime']}ms)',
+          );
         }
-        
-        // Cargar todos los datos SECUENCIALMENTE con delays LARGOS para evitar 429
-        await _loadCarnetData();
-        await Future.delayed(const Duration(seconds: 4)); // ⏱️ 4 segundos entre llamadas
-        
-        await _loadCitasData();
-        await Future.delayed(const Duration(seconds: 4));
-        
-        await _loadConsultasData();
-        await Future.delayed(const Duration(seconds: 4));
-        
-        await _loadVacunasData();
-        await Future.delayed(const Duration(seconds: 4));
-        
-        await loadPromociones(notifyWhenDone: false);
-        
+
+        await _loadCarnetData(force: true);
+
+        if (_carnet == null) {
+          _setError('No se pudo cargar el carnet.', 'SERVER');
+          _setLoading(false);
+          return false;
+        }
+
         // Guardar sesión en caché
         await _saveSession();
-        
-        // SOLO UNA notificación al final con todos los datos cargados
+
         _setLoading(false);
+        unawaited(_loadSecondaryDataInBackground(force: true));
         return true;
-        
       } else if (result != null && result['errorType'] == 'CREDENTIALS') {
         // Error de credenciales - mensaje específico
-        _setError(result['message'] ?? 'Credenciales incorrectas', 'CREDENTIALS');
+        _setError(
+          result['message'] ?? 'Credenciales incorrectas',
+          'CREDENTIALS',
+        );
         _setLoading(false);
         return false;
-        
       } else {
         // Error genérico
         _setError('Error en el servidor. Intente nuevamente.', 'SERVER');
         _setLoading(false);
         return false;
       }
-      
     } catch (e) {
       // El sistema de reintentos agotó los intentos
       final errorStr = e.toString();
-      
+
       if (errorStr.contains('TIMEOUT')) {
         _setError(
           'El servidor tardó demasiado en responder. Puede estar iniciando, intente en 30 segundos.',
-          'TIMEOUT'
+          'TIMEOUT',
         );
-      } else if (errorStr.contains('SocketException') || errorStr.contains('NetworkException')) {
-        _setError(
-          'Sin conexión a internet. Verifique su red.',
-          'NETWORK'
-        );
+      } else if (errorStr.contains('SocketException') ||
+          errorStr.contains('NetworkException')) {
+        _setError('Sin conexión a internet. Verifique su red.', 'NETWORK');
       } else {
         _setError(
           'Error de conexión después de múltiples intentos. Intente más tarde.',
-          'CONNECTION'
+          'CONNECTION',
         );
       }
-      
+
       _setLoading(false);
       return false;
     }
   }
 
   // 📝 MÉTODO DE REGISTRO CON VALIDACIÓN DE CARNET EXISTENTE
-  Future<bool> register(String correo, String matricula, String password) async {
+  Future<bool> register(
+    String correo,
+    String matricula,
+    String password,
+  ) async {
     _setLoading(true);
     _setError(null);
 
     try {
       final result = await ApiService.register(correo, matricula, password);
-      
+
       if (result != null && result['success'] == true) {
         print('✅ Registro exitoso para matrícula: $matricula');
         _setLoading(false);
@@ -258,7 +320,7 @@ class SessionProvider extends ChangeNotifier {
         // Carnet no existe en la base de datos
         _setError(
           'Correo o matrícula no encontrados. Debes generar tu carnet digital primero en el Departamento de Servicios de Salud.',
-          'NOT_FOUND'
+          'NOT_FOUND',
         );
         _setLoading(false);
         return false;
@@ -266,7 +328,7 @@ class SessionProvider extends ChangeNotifier {
         // Correo y matrícula no coinciden
         _setError(
           'El correo y la matrícula no coinciden. Verifica tus datos.',
-          'MISMATCH'
+          'MISMATCH',
         );
         _setLoading(false);
         return false;
@@ -274,7 +336,7 @@ class SessionProvider extends ChangeNotifier {
         // Ya existe una cuenta con estos datos
         _setError(
           'Ya existe una cuenta con esta matrícula. Intenta iniciar sesión.',
-          'ALREADY_EXISTS'
+          'ALREADY_EXISTS',
         );
         _setLoading(false);
         return false;
@@ -284,43 +346,43 @@ class SessionProvider extends ChangeNotifier {
         _setLoading(false);
         return false;
       }
-      
     } catch (e) {
       final errorStr = e.toString();
-      
+
       if (errorStr.contains('TIMEOUT')) {
         _setError(
           'El servidor tardó demasiado en responder. Intente en 30 segundos.',
-          'TIMEOUT'
+          'TIMEOUT',
         );
-      } else if (errorStr.contains('SocketException') || errorStr.contains('NetworkException')) {
-        _setError(
-          'Sin conexión a internet. Verifique su red.',
-          'NETWORK'
-        );
+      } else if (errorStr.contains('SocketException') ||
+          errorStr.contains('NetworkException')) {
+        _setError('Sin conexión a internet. Verifique su red.', 'NETWORK');
       } else {
-        _setError(
-          'Error de conexión. Intente más tarde.',
-          'CONNECTION'
-        );
+        _setError('Error de conexión. Intente más tarde.', 'CONNECTION');
       }
-      
+
       _setLoading(false);
       return false;
     }
   }
 
   // Cargar datos del carnet desde SASU
-  Future<void> _loadCarnetData() async {
+  Future<void> _loadCarnetData({
+    bool force = false,
+    bool notifyWhenDone = false,
+  }) async {
     if (_token == null) return;
+    if (!force && _carnet != null && _isFresh(_lastCarnetFetch)) return;
 
     try {
       print('🔍 Cargando datos del carnet...');
       final carnet = await ApiService.getMyCarnet(_token!);
       if (carnet != null) {
         _carnet = carnet;
+        _lastCarnetFetch = DateTime.now();
+        await _loadCarnetPhotoBytes();
         print('✅ Carnet cargado: ${carnet.nombreCompleto}');
-        // NO llamar notifyListeners() aquí - se llamará al final del login
+        if (notifyWhenDone) notifyListeners();
       } else {
         print('❌ No se pudo cargar el carnet');
       }
@@ -337,17 +399,19 @@ class SessionProvider extends ChangeNotifier {
   }
 
   // 🏥 CARGAR CITAS MÉDICAS - BACKEND REAL SASU
-  Future<void> _loadCitasData() async {
+  Future<void> _loadCitasData({bool force = false}) async {
     if (_token == null) return;
+    if (!force && _isFresh(_lastCitasFetch)) return;
 
     try {
       print('🔍 Cargando citas médicas desde SASU backend...');
       final data = await ApiService.getCitas(_token!);
-      
-      if (data != null && data.isNotEmpty) {
+      _lastCitasFetch = DateTime.now();
+
+      if (data.isNotEmpty) {
         _citas = data;
         print('✅ CITAS REALES CARGADAS: ${_citas.length} citas');
-        
+
         // Debug: mostrar primera cita
         if (_citas.isNotEmpty) {
           print('📋 PRIMERA CITA REAL: ${_citas.first}');
@@ -356,7 +420,7 @@ class SessionProvider extends ChangeNotifier {
         print('⚠️ NO HAY CITAS DISPONIBLES EN EL BACKEND SASU');
         _citas = [];
       }
-      
+
       // NO llamar notifyListeners() aquí - se llamará al final del login
     } catch (e) {
       final errorStr = e.toString();
@@ -374,29 +438,30 @@ class SessionProvider extends ChangeNotifier {
   // Método público para recargar citas
   Future<void> loadCitas() async {
     _setLoading(true);
-    await _loadCitasData();
+    await _loadCitasData(force: true);
     _setLoading(false);
   }
 
   // 📋 CARGAR CONSULTAS DE ATENCIÓN - BACKEND REAL SASU
-  Future<void> _loadConsultasData() async {
+  Future<void> _loadConsultasData({bool force = false}) async {
     if (_token == null) {
       print('⚠️ No hay token para cargar consultas');
       return;
     }
+    if (!force && _isFresh(_lastConsultasFetch)) return;
 
     try {
       print('🔍 Cargando consultas de atención desde SASU backend...');
-      print('🔑 Token disponible: ${_token!.substring(0, 20)}...');
-      
+
       final data = await ApiService.getConsultas(_token!);
-      
+      _lastConsultasFetch = DateTime.now();
+
       print('📊 Respuesta recibida: ${data.length} consultas');
-      
+
       if (data.isNotEmpty) {
         _consultas = data;
         print('✅ CONSULTAS REALES CARGADAS: ${_consultas.length} consultas');
-        
+
         // Debug: mostrar todas las consultas
         for (var i = 0; i < _consultas.length; i++) {
           final c = _consultas[i];
@@ -406,7 +471,7 @@ class SessionProvider extends ChangeNotifier {
         print('⚠️ NO HAY CONSULTAS DISPONIBLES EN EL BACKEND SASU');
         _consultas = [];
       }
-      
+
       // NO llamar notifyListeners() aquí - se llamará al final del login
     } catch (e) {
       final errorStr = e.toString();
@@ -425,7 +490,7 @@ class SessionProvider extends ChangeNotifier {
   // Método público para recargar consultas
   Future<void> loadConsultas() async {
     _setLoading(true);
-    await _loadConsultasData();
+    await _loadConsultasData(force: true);
     _setLoading(false);
   }
 
@@ -442,37 +507,34 @@ class SessionProvider extends ChangeNotifier {
     try {
       print('🗑️ Eliminando citas pasadas...');
       final resultado = await ApiService.deleteCitasPasadas(_token!);
-      
+
       if (resultado['success'] == true) {
         print('✅ Citas pasadas eliminadas: ${resultado['eliminadas']}');
       } else {
         print('❌ Error eliminando citas: ${resultado['message']}');
       }
-      
+
       return resultado;
-      
     } catch (e) {
       print('❌ ERROR ELIMINANDO CITAS PASADAS: $e');
-      return {
-        'success': false,
-        'errorType': 'ERROR',
-        'message': 'Error: $e',
-      };
+      return {'success': false, 'errorType': 'ERROR', 'message': 'Error: $e'};
     }
   }
 
   // �💉 CARGAR VACUNAS - BACKEND REAL SASU
-  Future<void> _loadVacunasData() async {
+  Future<void> _loadVacunasData({bool force = false}) async {
     if (_token == null) return;
+    if (!force && _isFresh(_lastVacunasFetch)) return;
 
     try {
       print('🔍 Cargando vacunas desde SASU backend...');
       final data = await ApiService.getVacunas(_token!);
-      
+      _lastVacunasFetch = DateTime.now();
+
       if (data.isNotEmpty) {
         _vacunas = data;
         print('✅ VACUNAS REALES CARGADAS: ${_vacunas.length} registros');
-        
+
         // Debug: mostrar primera vacuna
         if (_vacunas.isNotEmpty) {
           print('💉 PRIMERA VACUNA: ${_vacunas.first}');
@@ -481,7 +543,7 @@ class SessionProvider extends ChangeNotifier {
         print('⚠️ NO HAY VACUNAS DISPONIBLES EN EL BACKEND SASU');
         _vacunas = [];
       }
-      
+
       // NO llamar notifyListeners() aquí - se llamará al final del login
     } catch (e) {
       final errorStr = e.toString();
@@ -499,7 +561,7 @@ class SessionProvider extends ChangeNotifier {
   // Método público para recargar vacunas
   Future<void> loadVacunas() async {
     _setLoading(true);
-    await _loadVacunasData();
+    await _loadVacunasData(force: true);
     _setLoading(false);
   }
 
@@ -528,7 +590,7 @@ class SessionProvider extends ChangeNotifier {
       expedienteNotas: 'Estudiante regular con buen desempeño académico.',
       expedienteAdjuntos: '',
     );
-    
+
     _citas = [
       CitaModel(
         id: '1',
@@ -553,10 +615,10 @@ class SessionProvider extends ChangeNotifier {
         updatedAt: '2025-10-09T12:00:00',
       ),
     ];
-    
+
     // Promociones: se cargan dinámicamente desde Cosmos DB
     _promociones = [];
-    
+
     _isLoggedIn = true;
     _token = 'DEMO_TOKEN';
     notifyListeners();
@@ -567,45 +629,134 @@ class SessionProvider extends ChangeNotifier {
   // - "general": Para todos los usuarios
   // - "alumno": Para todos los alumnos (sin matrícula específica)
   // - matrícula específica: Solo para ese alumno
-  Future<void> loadPromociones({bool notifyWhenDone = true}) async {
+  Future<Map<String, dynamic>> uploadCarnetPhoto(
+    Uint8List bytes, {
+    required String fileName,
+    required String mimeType,
+  }) async {
+    if (_token == null || _token!.isEmpty || _token == 'DEMO_TOKEN') {
+      return {
+        'success': false,
+        'message': 'Inicia sesión para cambiar tu fotografía.',
+      };
+    }
+
+    _setLoading(true);
+    try {
+      final result = await ApiService.uploadCarnetPhoto(
+        _token!,
+        bytes,
+        fileName: fileName,
+        mimeType: mimeType,
+      );
+
+      final fotoUrl =
+          result['fotoUrl'] ??
+          (result['data'] is Map<String, dynamic>
+              ? result['data']['fotoUrl'] ??
+                    result['data']['foto_url'] ??
+                    result['data']['photoUrl'] ??
+                    result['data']['photo_url']
+              : null);
+
+      if (result['success'] == true && fotoUrl != null) {
+        _carnet = _carnet?.copyWith(fotoUrl: fotoUrl.toString());
+        _carnetPhotoBytes = bytes;
+        _lastCarnetFetch = DateTime.now();
+        await _saveSession();
+        notifyListeners();
+      }
+
+      return result;
+    } catch (e) {
+      final message = e.toString().contains('INVALID_TOKEN')
+          ? 'Tu sesión expiró. Vuelve a iniciar sesión.'
+          : 'No se pudo subir la fotografía.';
+      return {'success': false, 'message': message};
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<Map<String, dynamic>> removeCarnetPhoto() async {
+    if (_token == null || _token!.isEmpty || _token == 'DEMO_TOKEN') {
+      return {
+        'success': false,
+        'message': 'Inicia sesión para quitar tu fotografía.',
+      };
+    }
+
+    _setLoading(true);
+    try {
+      final result = await ApiService.removeCarnetPhoto(_token!);
+
+      if (result['success'] == true) {
+        _carnet = _carnet?.copyWith(clearFotoUrl: true);
+        _carnetPhotoBytes = null;
+        _lastCarnetFetch = DateTime.now();
+        await _saveSession();
+        notifyListeners();
+      }
+
+      return result;
+    } catch (_) {
+      return {'success': false, 'message': 'No se pudo quitar la fotografía.'};
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<void> loadPromociones({
+    bool notifyWhenDone = true,
+    bool force = false,
+    bool showLoading = true,
+  }) async {
+    if (!force && _isFresh(_lastPromocionesFetch)) return;
+
     print('📢 ============================================');
     print('📢 CARGANDO PROMOCIONES DE SALUD');
     print('📢 ============================================');
-    
+
     // En modo demo, cargar promociones desde API
     if (_token == 'DEMO_TOKEN') {
       print('⚠️ Modo DEMO - cargando desde API...');
       // Continuar con la carga normal
     }
-    
+
     // Validar autenticación
     if (_token == null || _token!.isEmpty) {
       print('❌ Sin token de autenticación');
       _promociones = [];
-      notifyListeners();
+      if (notifyWhenDone) notifyListeners();
       return;
     }
-    
+
     // Validar que tengamos matrícula
     if (_carnet == null || _carnet!.matricula.isEmpty) {
       print('❌ Sin matrícula en el carnet');
       _promociones = [];
-      notifyListeners();
+      if (notifyWhenDone) notifyListeners();
       return;
     }
-    
+
     final matricula = _carnet!.matricula;
     print('🎓 Matrícula: $matricula');
-    
-    _setLoading(true);
-    
+
+    if (showLoading) _setLoading(true);
+
     try {
       // Llamar al backend para obtener promociones
       print('🔄 Consultando backend: /me/promociones');
-      final promocionesApi = await ApiService.getPromocionesSalud(_token!, matricula);
-      
-      print('📊 Total recibido del backend: ${promocionesApi.length} promociones');
-      
+      final promocionesApi = await ApiService.getPromocionesSalud(
+        _token!,
+        matricula,
+      );
+      _lastPromocionesFetch = DateTime.now();
+
+      print(
+        '📊 Total recibido del backend: ${promocionesApi.length} promociones',
+      );
+
       if (promocionesApi.isEmpty) {
         print('ℹ️ No hay promociones disponibles');
         _promociones = [];
@@ -615,47 +766,53 @@ class SessionProvider extends ChangeNotifier {
         for (var p in promocionesApi) {
           print('   - ID: ${p.id}');
           print('     Destinatario: "${p.destinatario}"');
-          print('     Matrícula: "${p.matricula ?? ""}"');
+          print('     Matrícula: "${p.matricula}"');
           print('     Autorizado: ${p.autorizado}');
           print('     Categoría: ${p.categoria}');
         }
-        
+
         // NUEVA LÓGICA: Las promociones individuales NO requieren autorización
         // - destinatario="general" + autorizado=true → Para TODOS
         // - destinatario="alumno" + matricula="" + autorizado=true → Para TODOS los alumnos
         // - destinatario="alumno" + matricula="XXXX" → Para ese alumno (SIN requerir autorización)
-        
+
         print('🔍 FILTRANDO PROMOCIONES PARA MATRÍCULA: $matricula');
-        
+
         _promociones = promocionesApi.where((p) {
           final destinatarioLower = p.destinatario.toLowerCase().trim();
-          final matriculaPromo = p.matricula?.trim() ?? '';
-          
+          final matriculaPromo = p.matricula.trim();
+
           print('🔎 Evaluando promoción ${p.id}:');
           print('   Destinatario: "$destinatarioLower"');
           print('   Matrícula promo: "$matriculaPromo"');
           print('   Autorizado: ${p.autorizado}');
-          
+
           // Caso 1: Promoción GENERAL (para todos) - REQUIERE AUTORIZACIÓN
           if (destinatarioLower == 'general') {
             if (p.autorizado) {
-              print('   ✅ INCLUIDA: Es GENERAL autorizada (para todos los usuarios)');
+              print(
+                '   ✅ INCLUIDA: Es GENERAL autorizada (para todos los usuarios)',
+              );
               return true;
             } else {
               print('   ❌ EXCLUIDA: Es GENERAL pero no autorizada');
               return false;
             }
           }
-          
+
           // Caso 2: destinatario="alumno"
           if (destinatarioLower == 'alumno') {
             // Si tiene matrícula específica, verificar que coincida (NO requiere autorización)
             if (matriculaPromo.isNotEmpty) {
               if (matriculaPromo == matricula) {
-                print('   ✅ INCLUIDA: ALUMNO ESPECÍFICO (matrícula coincide: $matricula, no requiere autorización)');
+                print(
+                  '   ✅ INCLUIDA: ALUMNO ESPECÍFICO (matrícula coincide: $matricula, no requiere autorización)',
+                );
                 return true;
               } else {
-                print('   ❌ EXCLUIDA: Es para otro alumno ($matriculaPromo ≠ $matricula)');
+                print(
+                  '   ❌ EXCLUIDA: Es para otro alumno ($matriculaPromo ≠ $matricula)',
+                );
                 return false;
               }
             } else {
@@ -664,42 +821,49 @@ class SessionProvider extends ChangeNotifier {
                 print('   ✅ INCLUIDA: Para TODOS LOS ALUMNOS (autorizada)');
                 return true;
               } else {
-                print('   ❌ EXCLUIDA: Para todos los alumnos pero no autorizada');
+                print(
+                  '   ❌ EXCLUIDA: Para todos los alumnos pero no autorizada',
+                );
                 return false;
               }
             }
           }
-          
+
           // No aplica para este usuario
-          print('   ❌ EXCLUIDA: Destinatario "$destinatarioLower" no reconocido');
+          print(
+            '   ❌ EXCLUIDA: Destinatario "$destinatarioLower" no reconocido',
+          );
           return false;
         }).toList();
-        
+
         // FILTRO ADICIONAL: Solo promociones de los últimos 7 días
         final ahora = DateTime.now();
-        final hace7Dias = ahora.subtract(const Duration(days: 7));
-        
         _promociones = _promociones.where((p) {
           final diasDesdeCreacion = ahora.difference(p.createdAt).inDays;
-          
+
           if (diasDesdeCreacion <= 7) {
-            print('   ✅ Promoción ${p.id} vigente (${diasDesdeCreacion} días)');
+            print('   ✅ Promoción ${p.id} vigente ($diasDesdeCreacion días)');
             return true;
           } else {
-            print('   ⏰ Promoción ${p.id} expirada (${diasDesdeCreacion} días > 7)');
+            print(
+              '   ⏰ Promoción ${p.id} expirada ($diasDesdeCreacion días > 7)',
+            );
             return false;
           }
         }).toList();
-        
-        print('🎯 Promociones filtradas para mostrar (últimos 7 días): ${_promociones.length}');
+
+        print(
+          '🎯 Promociones filtradas para mostrar (últimos 7 días): ${_promociones.length}',
+        );
       }
-      
     } catch (e, stackTrace) {
       print('❌ ERROR al cargar promociones: $e');
       print('Stack: $stackTrace');
       _promociones = [];
     } finally {
-      _setLoading(false);
+      if (showLoading) {
+        _setLoading(false);
+      }
       if (notifyWhenDone) {
         notifyListeners();
       }
@@ -710,9 +874,12 @@ class SessionProvider extends ChangeNotifier {
   // 🗑️ MARCAR PROMOCIÓN COMO VISTA
   Future<void> marcarPromocionVista(String promocionId) async {
     if (_token == null) return;
-    
+
     try {
-      final success = await ApiService.marcarPromocionVista(_token!, promocionId);
+      final success = await ApiService.marcarPromocionVista(
+        _token!,
+        promocionId,
+      );
       if (success) {
         _promociones.removeWhere((p) => p.id == promocionId);
         notifyListeners();
@@ -729,9 +896,9 @@ class SessionProvider extends ChangeNotifier {
       print('⚠️ Diseño no válido: $nuevoDiseno');
       return;
     }
-    
+
     _carnetDesign = nuevoDiseno;
-    
+
     // Guardar preferencia
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -740,7 +907,7 @@ class SessionProvider extends ChangeNotifier {
     } catch (e) {
       print('❌ Error guardando preferencia de diseño: $e');
     }
-    
+
     notifyListeners();
   }
 
@@ -748,7 +915,7 @@ class SessionProvider extends ChangeNotifier {
   Future<void> logout() async {
     // CRÍTICO: NO borrar 'auth_token' ni 'alebrije_data' de SharedPreferences
     // para mantener la persistencia del alebrije y poder restaurar sesión
-    
+
     // Solo limpiar estado en memoria
     _isLoggedIn = false;
     _token = null;
@@ -757,18 +924,24 @@ class SessionProvider extends ChangeNotifier {
     _promociones = [];
     _vacunas = [];
     _consultas = [];
+    _carnetPhotoBytes = null;
+    _lastCarnetFetch = null;
+    _lastCitasFetch = null;
+    _lastPromocionesFetch = null;
+    _lastVacunasFetch = null;
+    _lastConsultasFetch = null;
     _error = null;
     _errorType = null;
-    
+
     print('👋 Sesión cerrada (alebrije y token preservados en localStorage)');
     notifyListeners();
   }
-  
+
   // Logout completo (borra TODO incluyendo alebrije) - usar solo para cambio de cuenta
   Future<void> logoutCompleto() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear(); // Borra TODO
-    
+
     _isLoggedIn = false;
     _token = null;
     _carnet = null;
@@ -776,9 +949,15 @@ class SessionProvider extends ChangeNotifier {
     _promociones = [];
     _vacunas = [];
     _consultas = [];
+    _carnetPhotoBytes = null;
+    _lastCarnetFetch = null;
+    _lastCitasFetch = null;
+    _lastPromocionesFetch = null;
+    _lastVacunasFetch = null;
+    _lastConsultasFetch = null;
     _error = null;
     _errorType = null;
-    
+
     print('🧹 Sesión y datos locales completamente eliminados');
     notifyListeners();
   }
