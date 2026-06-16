@@ -36,6 +36,7 @@ dependencies:
   
   # HTTP Client para SASU Backend
   http: ^1.2.1
+  http_parser: ^4.0.2
   
   # Caché local para sesión persistente
   shared_preferences: ^2.2.2
