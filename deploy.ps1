@@ -1,5 +1,9 @@
 $ErrorActionPreference = "Stop"
 
+$deployRepo = "https://github.com/CD-uagro/app.carnetdigital.space.git"
+$deployBranch = "main"
+$deployDir = Join-Path $env:TEMP "app-carnetdigital-space-pages"
+
 function Write-Step {
     param(
         [Parameter(Mandatory = $true)]
@@ -15,38 +19,56 @@ function Run-Command {
         [Parameter(Mandatory = $true)]
         [string]$Command,
         [Parameter(Mandatory = $true)]
-        [string[]]$Arguments
+        [string[]]$Arguments,
+        [string]$WorkingDirectory = $PWD.Path
     )
 
-    & $Command @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "Command failed: $Command $($Arguments -join ' ')"
+    Push-Location $WorkingDirectory
+    try {
+        & $Command @Arguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "Command failed: $Command $($Arguments -join ' ')"
+        }
+    } finally {
+        Pop-Location
     }
 }
 
-$branch = (git rev-parse --abbrev-ref HEAD).Trim()
-if ($branch -ne "main") {
-    throw "Deployment must run from branch 'main'. Current branch: '$branch'."
+function Clear-DeployDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $resolved = Resolve-Path $Path
+    $tempRoot = [System.IO.Path]::GetFullPath($env:TEMP)
+    $target = [System.IO.Path]::GetFullPath($resolved.Path)
+
+    if (-not $target.StartsWith($tempRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to clean directory outside TEMP: $target"
+    }
+
+    Get-ChildItem -LiteralPath $target -Force |
+        Where-Object { $_.Name -ne ".git" } |
+        Remove-Item -Recurse -Force
 }
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "   DEPLOY TO app.carnetdigital.space" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "Target repo: $deployRepo" -ForegroundColor White
 
-Write-Step "1/6 Checking GitHub Pages deployment mode"
-if (-not (Test-Path ".github\workflows\deploy.yml")) {
-    throw "Missing .github\workflows\deploy.yml. Cannot confirm GitHub Actions deployment."
-}
-Write-Host "Deployment mode: GitHub Actions Pages artifact from build/web" -ForegroundColor Green
-Write-Host "Trigger branch: main" -ForegroundColor Green
+Write-Step "1/7 Checking local source branch"
+$sourceBranch = (git rev-parse --abbrev-ref HEAD).Trim()
+Write-Host "Source branch: $sourceBranch" -ForegroundColor Green
 
-Write-Step "2/6 Installing dependencies"
+Write-Step "2/7 Installing dependencies"
 Run-Command "flutter" @("pub", "get")
 
-Write-Step "3/6 Building Flutter Web release"
+Write-Step "3/7 Building Flutter Web release"
 Run-Command "flutter" @("build", "web", "--release")
 
-Write-Step "4/6 Preparing Pages files in build/web"
+Write-Step "4/7 Preparing build/web for GitHub Pages"
 if (Test-Path "web\CNAME") {
     Copy-Item "web\CNAME" -Destination "build\web\CNAME" -Force
 } elseif (Test-Path "CNAME") {
@@ -54,30 +76,80 @@ if (Test-Path "web\CNAME") {
 } else {
     throw "CNAME not found in web\CNAME or project root."
 }
-
 New-Item -Path "build\web\.nojekyll" -ItemType File -Force | Out-Null
 Write-Host "CNAME:" -ForegroundColor Green
 Get-Content "build\web\CNAME"
 
-Write-Step "5/6 Staging source changes for GitHub Actions"
-Run-Command "git" @("add", "lib/screens/login_screen.dart", "lib/screens/carnet_screen_new.dart", "lib/screens/carnet_selector_screen.dart", "deploy.ps1")
-
-$pendingChanges = git diff --cached --name-only
-if ($pendingChanges) {
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm"
-    Run-Command "git" @("commit", "-m", "deploy: publish UAGro redesign - $timestamp")
-    Write-Host "Commit created." -ForegroundColor Green
+Write-Step "5/7 Cloning or updating static Pages repository"
+if (Test-Path $deployDir) {
+    Run-Command "git" @("fetch", "origin", $deployBranch) $deployDir
+    Run-Command "git" @("checkout", $deployBranch) $deployDir
+    Run-Command "git" @("reset", "--hard", "origin/$deployBranch") $deployDir
 } else {
-    Write-Host "No source changes to commit." -ForegroundColor Yellow
+    Run-Command "git" @("clone", "--branch", $deployBranch, $deployRepo, $deployDir)
 }
 
-Write-Step "6/6 Pushing main to GitHub"
-Run-Command "git" @("push", "origin", "main")
+Write-Step "6/7 Copying build/web into static repository"
+Clear-DeployDirectory $deployDir
+Get-ChildItem -LiteralPath "build\web" -Force |
+    Copy-Item -Destination $deployDir -Recurse -Force
+
+$workflowDir = Join-Path $deployDir ".github\workflows"
+New-Item -Path $workflowDir -ItemType Directory -Force | Out-Null
+@'
+name: Deploy static Flutter Web to GitHub Pages
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: "."
+      - id: deployment
+        uses: actions/deploy-pages@v4
+'@ | Set-Content -Path (Join-Path $workflowDir "deploy-pages.yml") -Encoding utf8
+
+Write-Step "7/7 Committing and pushing static site"
+Run-Command "git" @("add", "--all") $deployDir
+$changes = git -C $deployDir status --porcelain
+if ($changes) {
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm"
+    Run-Command "git" @("commit", "-m", "deploy: publish UAGro redesign - $timestamp") $deployDir
+    Run-Command "git" @("push", "origin", $deployBranch) $deployDir
+    Write-Host "Static site pushed to $deployRepo ($deployBranch)." -ForegroundColor Green
+} else {
+    Write-Host "No static changes to publish." -ForegroundColor Yellow
+}
+
+Run-Command "git" @("checkout", "-B", "gh-pages") $deployDir
+Run-Command "git" @("push", "origin", "gh-pages") $deployDir
+Run-Command "git" @("checkout", $deployBranch) $deployDir
+Write-Host "Static site also pushed to gh-pages for classic GitHub Pages." -ForegroundColor Green
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "   DEPLOYMENT STARTED" -ForegroundColor Green
+Write-Host "   DEPLOYMENT COMPLETED" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "GitHub Actions will build and publish build/web." -ForegroundColor White
 Write-Host "URL: https://app.carnetdigital.space" -ForegroundColor Cyan
+Write-Host "Fallback URL: https://cd-uagro.github.io/app.carnetdigital.space/" -ForegroundColor Cyan
 Write-Host "Note: GitHub Pages can take 1-5 minutes to update." -ForegroundColor Yellow
