@@ -13,6 +13,7 @@ import 'package:carnet_digital_uagro/models/cita_model.dart';
 import 'package:carnet_digital_uagro/models/promocion_salud_model.dart';
 import 'package:carnet_digital_uagro/models/vacuna_model.dart';
 import 'package:carnet_digital_uagro/models/consulta_model.dart';
+import 'package:carnet_digital_uagro/models/ticket_model.dart';
 
 class ApiService {
   // 🌐 BACKEND PRODUCCIÓN EN RENDER
@@ -992,6 +993,136 @@ class ApiService {
   // ═══════════════════════════════════════════════════════════
   // 🎨 ALEBRIJES - SISTEMA TAMAGOTCHI
   // ═══════════════════════════════════════════════════════════
+
+  static Future<List<TicketModel>> getMyTickets(String token) async {
+    try {
+      final url = Uri.parse('$baseUrl/tickets/my');
+
+      print('GET TICKETS REQUEST: $url');
+
+      final response = await http
+          .get(
+            url,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(
+            normalTimeout,
+            onTimeout: () {
+              throw Exception('TIMEOUT: Timeout obteniendo tickets');
+            },
+          );
+
+      print('TICKETS RESPONSE: ${response.statusCode}');
+      print('TICKETS BODY: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final ticketsJson = decoded is List
+            ? decoded
+            : decoded is Map<String, dynamic>
+                ? decoded['data']
+                : null;
+
+        if (ticketsJson is List) {
+          return ticketsJson.whereType<Map>().map((json) {
+            return TicketModel.fromJson(Map<String, dynamic>.from(json));
+          }).toList();
+        }
+
+        return [];
+      }
+
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        throw Exception('INVALID_TOKEN: Token invalido o expirado');
+      }
+
+      if (response.statusCode == 404) {
+        return [];
+      }
+
+      print('ERROR HTTP TICKETS: ${response.statusCode}');
+      return [];
+    } catch (e) {
+      print('GET TICKETS ERROR: $e');
+      if (e.toString().contains('INVALID_TOKEN')) {
+        rethrow;
+      }
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>> createTicket(
+    String token,
+    CrearTicketRequest request,
+  ) async {
+    try {
+      final url = Uri.parse('$baseUrl/tickets');
+
+      print('CREATE TICKET REQUEST: $url');
+
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(request.toJson()),
+          )
+          .timeout(
+            normalTimeout,
+            onTimeout: () {
+              throw Exception('TIMEOUT: Timeout creando ticket');
+            },
+          );
+
+      print('CREATE TICKET RESPONSE: ${response.statusCode}');
+      print('CREATE TICKET BODY: ${response.body}');
+
+      final data = _decodeJsonObject(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Ticket creado correctamente',
+          'data': data['data'],
+        };
+      }
+
+      if (response.statusCode == 400) {
+        return {
+          'success': false,
+          'statusCode': response.statusCode,
+          'errorType': 'VALIDATION',
+          'message': data['message'] ?? 'Revisa los datos del ticket',
+        };
+      }
+
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        throw Exception('INVALID_TOKEN: Token invalido o expirado');
+      }
+
+      return {
+        'success': false,
+        'statusCode': response.statusCode,
+        'errorType': 'SERVER_ERROR',
+        'message': data['message'] ?? 'No se pudo crear el ticket',
+      };
+    } catch (e) {
+      print('CREATE TICKET ERROR: $e');
+      if (e.toString().contains('INVALID_TOKEN')) {
+        rethrow;
+      }
+      return {
+        'success': false,
+        'errorType': 'CONNECTION',
+        'message': 'Error de conexion. Intente mas tarde.',
+      };
+    }
+  }
 
   /// GET /me/alebrije - Obtener alebrije del usuario
   static Future<Map<String, dynamic>?> getAlebrije(String token) async {

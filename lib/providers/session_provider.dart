@@ -13,6 +13,7 @@ import 'package:carnet_digital_uagro/models/cita_model.dart';
 import 'package:carnet_digital_uagro/models/promocion_salud_model.dart';
 import 'package:carnet_digital_uagro/models/vacuna_model.dart';
 import 'package:carnet_digital_uagro/models/consulta_model.dart';
+import 'package:carnet_digital_uagro/models/ticket_model.dart';
 import 'package:carnet_digital_uagro/services/api_service.dart';
 
 class SessionProvider extends ChangeNotifier {
@@ -27,12 +28,16 @@ class SessionProvider extends ChangeNotifier {
   List<PromocionSaludModel> _promociones = [];
   List<VacunaModel> _vacunas = [];
   List<ConsultaModel> _consultas = [];
+  List<TicketModel> _tickets = [];
   Uint8List? _carnetPhotoBytes;
   DateTime? _lastCarnetFetch;
   DateTime? _lastCitasFetch;
   DateTime? _lastPromocionesFetch;
   DateTime? _lastVacunasFetch;
   DateTime? _lastConsultasFetch;
+  DateTime? _lastTicketsFetch;
+  bool _isTicketsLoading = false;
+  String? _ticketsError;
 
   static const Duration _dataCacheTtl = Duration(minutes: 5);
 
@@ -55,7 +60,10 @@ class SessionProvider extends ChangeNotifier {
   List<PromocionSaludModel> get promociones => _promociones;
   List<VacunaModel> get vacunas => _vacunas;
   List<ConsultaModel> get consultas => _consultas;
+  List<TicketModel> get tickets => _tickets;
   Uint8List? get carnetPhotoBytes => _carnetPhotoBytes;
+  bool get isTicketsLoading => _isTicketsLoading;
+  String? get ticketsError => _ticketsError;
   bool get backendHealthy => _backendHealthy;
   String? get backendMessage => _backendMessage;
   int? get backendResponseTime => _backendResponseTime;
@@ -495,6 +503,108 @@ class SessionProvider extends ChangeNotifier {
   }
 
   // 🗑️ ELIMINAR CITAS PASADAS
+  Future<void> loadTickets({bool force = false}) async {
+    if (_token == null || _token!.isEmpty || _token == 'DEMO_TOKEN') {
+      _tickets = [];
+      _ticketsError = 'Inicia sesión para consultar tus tickets.';
+      notifyListeners();
+      return;
+    }
+
+    if (!force && _isFresh(_lastTicketsFetch)) return;
+
+    _isTicketsLoading = true;
+    _ticketsError = null;
+    notifyListeners();
+
+    try {
+      final data = await ApiService.getMyTickets(_token!);
+      _tickets = data;
+      _lastTicketsFetch = DateTime.now();
+    } catch (e) {
+      final errorStr = e.toString();
+      if (errorStr.contains('INVALID_TOKEN')) {
+        await clearCache();
+        await logout();
+        _ticketsError = 'Tu sesión expiró. Vuelve a iniciar sesión.';
+      } else {
+        _tickets = [];
+        _ticketsError = 'No se pudieron cargar tus tickets.';
+      }
+    } finally {
+      _isTicketsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<Map<String, dynamic>> createTicket({
+    required String categoria,
+    required String prioridad,
+    required String titulo,
+    required String descripcion,
+  }) async {
+    if (_token == null || _token!.isEmpty || _token == 'DEMO_TOKEN') {
+      return {
+        'success': false,
+        'errorType': 'NO_TOKEN',
+        'message': 'Inicia sesión para crear un ticket.',
+      };
+    }
+
+    final carnet = _carnet;
+    if (carnet == null || carnet.matricula.trim().isEmpty) {
+      return {
+        'success': false,
+        'errorType': 'NO_CARNET',
+        'message': 'No se encontraron datos del alumno en la sesión.',
+      };
+    }
+
+    final request = CrearTicketRequest(
+      categoria: categoria,
+      prioridad: prioridad,
+      titulo: titulo,
+      descripcion: descripcion,
+      matricula: carnet.matricula,
+      nombreCompleto: carnet.nombreCompleto,
+      correo: carnet.correo,
+    );
+
+    _isTicketsLoading = true;
+    _ticketsError = null;
+    notifyListeners();
+
+    try {
+      final result = await ApiService.createTicket(_token!, request);
+      if (result['success'] == true) {
+        await loadTickets(force: true);
+      } else {
+        _ticketsError = result['message']?.toString();
+      }
+      return result;
+    } catch (e) {
+      if (e.toString().contains('INVALID_TOKEN')) {
+        await clearCache();
+        await logout();
+        return {
+          'success': false,
+          'errorType': 'INVALID_TOKEN',
+          'message': 'Tu sesión expiró. Vuelve a iniciar sesión.',
+        };
+      }
+
+      _ticketsError = 'No se pudo crear el ticket.';
+      return {
+        'success': false,
+        'errorType': 'ERROR',
+        'message': 'No se pudo crear el ticket.',
+      };
+    } finally {
+      _isTicketsLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<Map<String, dynamic>> eliminarCitasPasadas() async {
     if (_token == null) {
       return {
@@ -924,12 +1034,16 @@ class SessionProvider extends ChangeNotifier {
     _promociones = [];
     _vacunas = [];
     _consultas = [];
+    _tickets = [];
     _carnetPhotoBytes = null;
     _lastCarnetFetch = null;
     _lastCitasFetch = null;
     _lastPromocionesFetch = null;
     _lastVacunasFetch = null;
     _lastConsultasFetch = null;
+    _lastTicketsFetch = null;
+    _isTicketsLoading = false;
+    _ticketsError = null;
     _error = null;
     _errorType = null;
 
@@ -949,12 +1063,16 @@ class SessionProvider extends ChangeNotifier {
     _promociones = [];
     _vacunas = [];
     _consultas = [];
+    _tickets = [];
     _carnetPhotoBytes = null;
     _lastCarnetFetch = null;
     _lastCitasFetch = null;
     _lastPromocionesFetch = null;
     _lastVacunasFetch = null;
     _lastConsultasFetch = null;
+    _lastTicketsFetch = null;
+    _isTicketsLoading = false;
+    _ticketsError = null;
     _error = null;
     _errorType = null;
 
