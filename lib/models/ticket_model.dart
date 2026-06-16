@@ -97,6 +97,48 @@ class TicketModel {
   }
 }
 
+class TicketMessageModel {
+  final String id;
+  final String ticketId;
+  final String senderRole;
+  final String senderName;
+  final String message;
+  final DateTime? createdAt;
+
+  const TicketMessageModel({
+    required this.id,
+    required this.ticketId,
+    required this.senderRole,
+    required this.senderName,
+    required this.message,
+    this.createdAt,
+  });
+
+  factory TicketMessageModel.fromJson(Map<String, dynamic> json) {
+    return TicketMessageModel(
+      id: TicketModel._readString(json, ['id', '_id']),
+      ticketId: TicketModel._readString(json, ['ticketId', 'ticket_id']),
+      senderRole: TicketModel._readString(json, [
+        'senderRole',
+        'sender_role',
+        'role',
+      ]),
+      senderName: TicketModel._readString(json, [
+        'senderName',
+        'sender_name',
+        'author',
+        'senderId',
+      ]),
+      message: TicketModel._readString(json, ['message', 'mensaje', 'body']),
+      createdAt: TicketModel._readDate(json, [
+        'createdAtUtc',
+        'created_at',
+        'createdAt',
+      ]),
+    );
+  }
+}
+
 class CrearTicketRequest {
   final String categoria;
   final String prioridad;

@@ -1,5 +1,6 @@
 import 'package:carnet_digital_uagro/models/ticket_model.dart';
 import 'package:carnet_digital_uagro/providers/session_provider.dart';
+import 'package:carnet_digital_uagro/services/api_service.dart';
 import 'package:carnet_digital_uagro/theme/uagro_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -174,7 +175,9 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
           if (session.tickets.isEmpty)
             _buildEmptyTickets()
           else
-            ...session.tickets.map(_buildTicketCard),
+            ...session.tickets.map(
+              (ticket) => _buildTicketCard(context, session, ticket),
+            ),
         ],
       ),
     );
@@ -421,78 +424,114 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
     );
   }
 
-  Widget _buildTicketCard(TicketModel ticket) {
+  Widget _buildTicketCard(
+    BuildContext context,
+    SessionProvider session,
+    TicketModel ticket,
+  ) {
     final priorityColor = _priorityColor(ticket.prioridad);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: UAGroColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openTicketDetail(context, session, ticket),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: UAGroColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.confirmation_number_rounded,
+                      color: UAGroColors.primary,
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.confirmation_number_rounded,
-                    color: UAGroColors.primary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        ticket.titulo.isEmpty
-                            ? 'Ticket sin título'
-                            : ticket.titulo,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          ticket.titulo.isEmpty
+                              ? 'Ticket sin título'
+                              : ticket.titulo,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatDate(ticket.createdAt),
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          _formatDate(ticket.createdAt),
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildChip(
-                  _categoryLabel(ticket.categoria),
-                  UAGroColors.primary,
-                ),
-                _buildChip(_priorityLabel(ticket.prioridad), priorityColor),
-                _buildChip(_statusLabel(ticket.estado), UAGroColors.success),
-              ],
-            ),
-            if (ticket.descripcion.trim().isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(
-                ticket.descripcion,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Colors.grey.shade800),
+                ],
               ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildChip(
+                    _categoryLabel(ticket.categoria),
+                    UAGroColors.primary,
+                  ),
+                  _buildChip(_priorityLabel(ticket.prioridad), priorityColor),
+                  _buildChip(_statusLabel(ticket.estado), UAGroColors.success),
+                ],
+              ),
+              if (ticket.descripcion.trim().isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  ticket.descripcion,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Colors.grey.shade800),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
+      ),
+    );
+  }
+
+  void _openTicketDetail(
+    BuildContext context,
+    SessionProvider session,
+    TicketModel ticket,
+  ) {
+    final token = session.token;
+    if (token == null || token.isEmpty || token == 'DEMO_TOKEN') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('SesiÃ³n requerida para ver respuestas.')),
+      );
+      return;
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => _TicketDetailSheet(
+        ticket: ticket,
+        token: token,
+        formatDate: _formatDate,
+        statusLabel: _statusLabel,
+        categoryLabel: _categoryLabel,
+        priorityLabel: _priorityLabel,
       ),
     );
   }
@@ -551,5 +590,213 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
     final hour = date.hour.toString().padLeft(2, '0');
     final minute = date.minute.toString().padLeft(2, '0');
     return '$day/$month/$year $hour:$minute';
+  }
+}
+
+class _TicketDetailSheet extends StatefulWidget {
+  final TicketModel ticket;
+  final String token;
+  final String Function(DateTime?) formatDate;
+  final String Function(String) statusLabel;
+  final String Function(String) categoryLabel;
+  final String Function(String) priorityLabel;
+
+  const _TicketDetailSheet({
+    required this.ticket,
+    required this.token,
+    required this.formatDate,
+    required this.statusLabel,
+    required this.categoryLabel,
+    required this.priorityLabel,
+  });
+
+  @override
+  State<_TicketDetailSheet> createState() => _TicketDetailSheetState();
+}
+
+class _TicketDetailSheetState extends State<_TicketDetailSheet> {
+  late Future<List<TicketMessageModel>> _messagesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _messagesFuture = ApiService.getTicketMessages(
+      widget.token,
+      widget.ticket.id,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ticket = widget.ticket;
+
+    return FractionallySizedBox(
+      heightFactor: 0.88,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    ticket.titulo.isEmpty
+                        ? 'Ticket sin tÃ­tulo'
+                        : ticket.titulo,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Cerrar',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _detailChip(
+                  widget.statusLabel(ticket.estado),
+                  UAGroColors.success,
+                ),
+                _detailChip(
+                  widget.categoryLabel(ticket.categoria),
+                  UAGroColors.primary,
+                ),
+                _detailChip(
+                  widget.priorityLabel(ticket.prioridad),
+                  UAGroColors.warning,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Creado: ${widget.formatDate(ticket.createdAt)}',
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+            if (ticket.descripcion.trim().isNotEmpty) ...[
+              const SizedBox(height: 14),
+              const Text(
+                'Solicitud',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 6),
+              Text(ticket.descripcion),
+            ],
+            const Divider(height: 28),
+            const Text(
+              'Respuestas visibles',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: FutureBuilder<List<TicketMessageModel>>(
+                future: _messagesFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return const Center(
+                      child: Text('No se pudieron cargar las respuestas.'),
+                    );
+                  }
+
+                  final messages =
+                      snapshot.data ?? const <TicketMessageModel>[];
+                  if (messages.isEmpty) {
+                    return Center(
+                      child: Text(
+                        'AÃºn no hay respuestas visibles para alumno.',
+                        style: TextStyle(color: Colors.grey.shade700),
+                        textAlign: TextAlign.center,
+                      ),
+                    );
+                  }
+
+                  return ListView.separated(
+                    itemCount: messages.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      return _messageItem(messages[index]);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _messageItem(TicketMessageModel message) {
+    final isStudent = message.senderRole == 'alumno';
+    final color = isStudent ? UAGroColors.primary : UAGroColors.success;
+    final sender = message.senderName.trim().isEmpty
+        ? (isStudent ? 'Alumno' : 'Centro de AtenciÃ³n')
+        : message.senderName;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isStudent ? Icons.person_outline_rounded : Icons.support_agent,
+                color: color,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  sender,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              Text(
+                widget.formatDate(message.createdAt),
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(message.message),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailChip(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
   }
 }

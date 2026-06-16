@@ -1059,6 +1059,73 @@ class ApiService {
     }
   }
 
+  static Future<List<TicketMessageModel>> getTicketMessages(
+    String token,
+    String ticketId,
+  ) async {
+    try {
+      final encodedTicketId = Uri.encodeComponent(ticketId);
+      final url = Uri.parse(
+        '$ticketsBaseUrl/tickets/$encodedTicketId/messages',
+      );
+
+      print('GET TICKET MESSAGES REQUEST URL: $url');
+
+      final response = await http
+          .get(
+            url,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(
+            normalTimeout,
+            onTimeout: () {
+              throw Exception('TIMEOUT: Timeout obteniendo mensajes');
+            },
+          );
+
+      print('GET TICKET MESSAGES STATUS: ${response.statusCode}');
+      if (response.statusCode != 200) {
+        print('GET TICKET MESSAGES ERROR BODY: ${response.body}');
+      }
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final messagesJson = decoded is List
+            ? decoded
+            : decoded is Map<String, dynamic>
+            ? decoded['data']
+            : null;
+
+        if (messagesJson is List) {
+          return messagesJson.whereType<Map>().map((json) {
+            return TicketMessageModel.fromJson(Map<String, dynamic>.from(json));
+          }).toList();
+        }
+
+        return [];
+      }
+
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        throw Exception('INVALID_TOKEN: Token invalido o expirado');
+      }
+
+      if (response.statusCode == 404) {
+        return [];
+      }
+
+      return [];
+    } catch (e) {
+      print('GET TICKET MESSAGES EXCEPTION: ${e.runtimeType}: $e');
+      if (e.toString().contains('INVALID_TOKEN')) {
+        rethrow;
+      }
+      return [];
+    }
+  }
+
   static Future<Map<String, dynamic>> createTicket(
     String token,
     CrearTicketRequest request,
