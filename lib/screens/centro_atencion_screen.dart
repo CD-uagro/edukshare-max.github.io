@@ -38,14 +38,13 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
 
   String _categoria = 'soporte_carnet';
   String _prioridad = 'media';
+  bool _initialTicketsLoadRequested = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<SessionProvider>().loadTickets(force: true);
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadTicketsIfReady());
   }
 
   @override
@@ -67,13 +66,30 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           tabs: const [
-            Tab(icon: Icon(Icons.confirmation_number_rounded), text: 'Mis Tickets'),
-            Tab(icon: Icon(Icons.add_circle_outline_rounded), text: 'Crear Ticket'),
+            Tab(
+              icon: Icon(Icons.confirmation_number_rounded),
+              text: 'Mis Tickets',
+            ),
+            Tab(
+              icon: Icon(Icons.add_circle_outline_rounded),
+              text: 'Crear Ticket',
+            ),
           ],
         ),
       ),
       body: Consumer<SessionProvider>(
         builder: (context, session, child) {
+          if (session.isAuthenticated && session.carnet != null) {
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => _loadTicketsIfReady(),
+            );
+          }
+
+          if (session.isLoading ||
+              (session.isAuthenticated && session.carnet == null)) {
+            return _buildSessionLoading();
+          }
+
           if (!session.isAuthenticated || session.carnet == null) {
             return _buildSessionRequired(context);
           }
@@ -88,6 +104,20 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
         },
       ),
     );
+  }
+
+  void _loadTicketsIfReady() {
+    if (!mounted || _initialTicketsLoadRequested) return;
+
+    final session = context.read<SessionProvider>();
+    if (!session.isAuthenticated || session.carnet == null) return;
+
+    _initialTicketsLoadRequested = true;
+    session.loadTickets(force: true);
+  }
+
+  Widget _buildSessionLoading() {
+    return const Center(child: CircularProgressIndicator());
   }
 
   Widget _buildSessionRequired(BuildContext context) {
@@ -114,7 +144,8 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
-              onPressed: () => Navigator.of(context).pushReplacementNamed('/login'),
+              onPressed: () =>
+                  Navigator.of(context).pushReplacementNamed('/login'),
               icon: const Icon(Icons.login_rounded),
               label: const Text('Ir a login'),
             ),
@@ -178,7 +209,7 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
                   ),
                   const SizedBox(height: 18),
                   DropdownButtonFormField<String>(
-                    value: _categoria,
+                    initialValue: _categoria,
                     isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Categoría',
@@ -190,17 +221,20 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
                         child: Text(entry.value),
                       );
                     }).toList(),
-                    validator: (value) =>
-                        value == null || value.isEmpty ? 'Selecciona una categoría.' : null,
+                    validator: (value) => value == null || value.isEmpty
+                        ? 'Selecciona una categoría.'
+                        : null,
                     onChanged: session.isTicketsLoading
                         ? null
                         : (value) {
-                            if (value != null) setState(() => _categoria = value);
+                            if (value != null) {
+                              setState(() => _categoria = value);
+                            }
                           },
                   ),
                   const SizedBox(height: 14),
                   DropdownButtonFormField<String>(
-                    value: _prioridad,
+                    initialValue: _prioridad,
                     isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Prioridad',
@@ -212,12 +246,15 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
                         child: Text(entry.value),
                       );
                     }).toList(),
-                    validator: (value) =>
-                        value == null || value.isEmpty ? 'Selecciona una prioridad.' : null,
+                    validator: (value) => value == null || value.isEmpty
+                        ? 'Selecciona una prioridad.'
+                        : null,
                     onChanged: session.isTicketsLoading
                         ? null
                         : (value) {
-                            if (value != null) setState(() => _prioridad = value);
+                            if (value != null) {
+                              setState(() => _prioridad = value);
+                            }
                           },
                   ),
                   const SizedBox(height: 14),
@@ -229,8 +266,9 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
                       labelText: 'Título',
                       prefixIcon: Icon(Icons.title_rounded),
                     ),
-                    validator: (value) =>
-                        value == null || value.trim().isEmpty ? 'Escribe un título.' : null,
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Escribe un título.'
+                        : null,
                   ),
                   const SizedBox(height: 14),
                   TextFormField(
@@ -286,7 +324,7 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
       descripcion: _descripcionController.text.trim(),
     );
 
-    if (!mounted) return;
+    if (!context.mounted) return;
 
     final messenger = ScaffoldMessenger.of(context);
     if (result['success'] == true) {
@@ -304,7 +342,9 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
     } else {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(result['message']?.toString() ?? 'No se pudo crear el ticket.'),
+          content: Text(
+            result['message']?.toString() ?? 'No se pudo crear el ticket.',
+          ),
           backgroundColor: UAGroColors.error,
         ),
       );
@@ -315,8 +355,8 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: UAGroColors.warning.withOpacity(0.12),
-        border: Border.all(color: UAGroColors.warning.withOpacity(0.45)),
+        color: UAGroColors.warning.withValues(alpha: 0.12),
+        border: Border.all(color: UAGroColors.warning.withValues(alpha: 0.45)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: const Row(
@@ -339,8 +379,8 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: UAGroColors.error.withOpacity(0.08),
-        border: Border.all(color: UAGroColors.error.withOpacity(0.3)),
+        color: UAGroColors.error.withValues(alpha: 0.08),
+        border: Border.all(color: UAGroColors.error.withValues(alpha: 0.3)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -358,11 +398,7 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
       padding: const EdgeInsets.symmetric(vertical: 56),
       child: Column(
         children: [
-          Icon(
-            Icons.inbox_outlined,
-            size: 72,
-            color: Colors.grey.shade400,
-          ),
+          Icon(Icons.inbox_outlined, size: 72, color: Colors.grey.shade400),
           const SizedBox(height: 14),
           const Text(
             'No tienes tickets registrados',
@@ -401,7 +437,7 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: UAGroColors.primary.withOpacity(0.1),
+                    color: UAGroColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Icon(
@@ -415,7 +451,9 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        ticket.titulo.isEmpty ? 'Ticket sin título' : ticket.titulo,
+                        ticket.titulo.isEmpty
+                            ? 'Ticket sin título'
+                            : ticket.titulo,
                         style: const TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.w800,
@@ -436,7 +474,10 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
               spacing: 8,
               runSpacing: 8,
               children: [
-                _buildChip(_categoryLabel(ticket.categoria), UAGroColors.primary),
+                _buildChip(
+                  _categoryLabel(ticket.categoria),
+                  UAGroColors.primary,
+                ),
                 _buildChip(_priorityLabel(ticket.prioridad), priorityColor),
                 _buildChip(_statusLabel(ticket.estado), UAGroColors.success),
               ],
@@ -460,9 +501,9 @@ class _CentroAtencionScreenState extends State<CentroAtencionScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.25)),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Text(
         label,

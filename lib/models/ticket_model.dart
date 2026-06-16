@@ -26,17 +26,32 @@ class TicketModel {
       id: _readString(json, ['id', '_id', 'ticketId', 'ticket_id']),
       matricula: _readString(json, ['matricula', 'studentId', 'student_id']),
       categoria: _readString(json, ['categoria', 'category']),
-      prioridad: _readString(json, ['prioridad', 'priority'], fallback: 'media'),
+      prioridad: _readString(json, [
+        'prioridad',
+        'priority',
+      ], fallback: 'media'),
       titulo: _readString(json, ['titulo', 'title', 'asunto', 'subject']),
       descripcion: _readString(json, [
         'descripcion',
+        'descripcionInicial',
+        'initialDescription',
         'description',
         'detalle',
         'body',
       ]),
       estado: _readString(json, ['estado', 'status'], fallback: 'abierto'),
-      createdAt: _readDate(json, ['createdAt', 'created_at', 'fechaCreacion']),
-      updatedAt: _readDate(json, ['updatedAt', 'updated_at', 'fechaActualizacion']),
+      createdAt: _readDate(json, [
+        'createdAt',
+        'createdAtUtc',
+        'created_at',
+        'fechaCreacion',
+      ]),
+      updatedAt: _readDate(json, [
+        'updatedAt',
+        'updatedAtUtc',
+        'updated_at',
+        'fechaActualizacion',
+      ]),
     );
   }
 
@@ -90,6 +105,7 @@ class CrearTicketRequest {
   final String matricula;
   final String nombreCompleto;
   final String correo;
+  final String campus;
 
   const CrearTicketRequest({
     required this.categoria,
@@ -99,15 +115,20 @@ class CrearTicketRequest {
     required this.matricula,
     required this.nombreCompleto,
     required this.correo,
+    required this.campus,
   });
 
   Map<String, dynamic> toJson() {
     return {
+      'patientId': matricula,
+      'matricula': matricula,
+      'nombrePaciente': nombreCompleto,
+      'campus': campus,
       'categoria': categoria,
       'prioridad': prioridad,
       'titulo': titulo,
+      'descripcionInicial': descripcion,
       'descripcion': descripcion,
-      'matricula': matricula,
       'nombreCompleto': nombreCompleto,
       'correo': correo,
     };

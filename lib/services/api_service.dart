@@ -18,6 +18,8 @@ import 'package:carnet_digital_uagro/models/ticket_model.dart';
 class ApiService {
   // 🌐 BACKEND PRODUCCIÓN EN RENDER
   static const String baseUrl = 'https://carnet-alumnos-nodes.onrender.com';
+  static const String ticketsBaseUrl =
+      'https://fastapi-backend-o7ks.onrender.com';
   // static const String baseUrl = 'http://localhost:3000'; // Para pruebas locales
 
   // ⚙️ CONFIGURACIÓN DE REINTENTOS Y TIMEOUTS
@@ -996,9 +998,9 @@ class ApiService {
 
   static Future<List<TicketModel>> getMyTickets(String token) async {
     try {
-      final url = Uri.parse('$baseUrl/tickets/my');
+      final url = Uri.parse('$ticketsBaseUrl/tickets/my');
 
-      print('GET TICKETS REQUEST: $url');
+      print('GET TICKETS REQUEST URL: $url');
 
       final response = await http
           .get(
@@ -1015,16 +1017,18 @@ class ApiService {
             },
           );
 
-      print('TICKETS RESPONSE: ${response.statusCode}');
-      print('TICKETS BODY: ${response.body}');
+      print('GET TICKETS STATUS: ${response.statusCode}');
+      if (response.statusCode != 200) {
+        print('GET TICKETS ERROR BODY: ${response.body}');
+      }
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         final ticketsJson = decoded is List
             ? decoded
             : decoded is Map<String, dynamic>
-                ? decoded['data']
-                : null;
+            ? decoded['data']
+            : null;
 
         if (ticketsJson is List) {
           return ticketsJson.whereType<Map>().map((json) {
@@ -1043,10 +1047,11 @@ class ApiService {
         return [];
       }
 
-      print('ERROR HTTP TICKETS: ${response.statusCode}');
+      print('GET TICKETS HTTP ERROR STATUS: ${response.statusCode}');
+      print('GET TICKETS ERROR BODY: ${response.body}');
       return [];
     } catch (e) {
-      print('GET TICKETS ERROR: $e');
+      print('GET TICKETS EXCEPTION: ${e.runtimeType}: $e');
       if (e.toString().contains('INVALID_TOKEN')) {
         rethrow;
       }
@@ -1059,9 +1064,9 @@ class ApiService {
     CrearTicketRequest request,
   ) async {
     try {
-      final url = Uri.parse('$baseUrl/tickets');
+      final url = Uri.parse('$ticketsBaseUrl/tickets');
 
-      print('CREATE TICKET REQUEST: $url');
+      print('CREATE TICKET REQUEST URL: $url');
 
       final response = await http
           .post(
@@ -1079,8 +1084,10 @@ class ApiService {
             },
           );
 
-      print('CREATE TICKET RESPONSE: ${response.statusCode}');
-      print('CREATE TICKET BODY: ${response.body}');
+      print('CREATE TICKET STATUS: ${response.statusCode}');
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        print('CREATE TICKET ERROR BODY: ${response.body}');
+      }
 
       final data = _decodeJsonObject(response.body);
 
@@ -1112,7 +1119,7 @@ class ApiService {
         'message': data['message'] ?? 'No se pudo crear el ticket',
       };
     } catch (e) {
-      print('CREATE TICKET ERROR: $e');
+      print('CREATE TICKET EXCEPTION: ${e.runtimeType}: $e');
       if (e.toString().contains('INVALID_TOKEN')) {
         rethrow;
       }

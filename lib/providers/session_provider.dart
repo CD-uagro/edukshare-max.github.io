@@ -40,6 +40,7 @@ class SessionProvider extends ChangeNotifier {
   String? _ticketsError;
 
   static const Duration _dataCacheTtl = Duration(minutes: 5);
+  static const String _defaultTicketsCampus = 'cres-llano-largo';
 
   // Estado del backend
   bool _backendHealthy = true;
@@ -524,9 +525,9 @@ class SessionProvider extends ChangeNotifier {
     } catch (e) {
       final errorStr = e.toString();
       if (errorStr.contains('INVALID_TOKEN')) {
-        await clearCache();
-        await logout();
-        _ticketsError = 'Tu sesión expiró. Vuelve a iniciar sesión.';
+        _tickets = [];
+        _ticketsError =
+            'No se pudo autenticar con el Centro de Atención. Tu sesión del carnet sigue activa.';
       } else {
         _tickets = [];
         _ticketsError = 'No se pudieron cargar tus tickets.';
@@ -568,6 +569,7 @@ class SessionProvider extends ChangeNotifier {
       matricula: carnet.matricula,
       nombreCompleto: carnet.nombreCompleto,
       correo: carnet.correo,
+      campus: _defaultTicketsCampus,
     );
 
     _isTicketsLoading = true;
@@ -584,12 +586,13 @@ class SessionProvider extends ChangeNotifier {
       return result;
     } catch (e) {
       if (e.toString().contains('INVALID_TOKEN')) {
-        await clearCache();
-        await logout();
+        _ticketsError =
+            'No se pudo autenticar con el Centro de Atención. Tu sesión del carnet sigue activa.';
         return {
           'success': false,
           'errorType': 'INVALID_TOKEN',
-          'message': 'Tu sesión expiró. Vuelve a iniciar sesión.',
+          'message':
+              'No se pudo autenticar con el Centro de Atención. Tu sesión del carnet sigue activa.',
         };
       }
 
