@@ -277,6 +277,11 @@ class _CarnetScreenNewState extends State<CarnetScreenNew>
         () => _scrollToSection(_appointmentsKey, 'Citas y Consultas'),
       ),
       _NavItem(
+        Icons.support_agent_rounded,
+        'Centro de Atención',
+        () => Navigator.pushNamed(context, '/atencion'),
+      ),
+      _NavItem(
         Icons.auto_awesome_rounded,
         'Promociones',
         () => _scrollToSection(_promotionsKey, 'Promociones'),
@@ -1123,6 +1128,17 @@ class _CarnetScreenNewState extends State<CarnetScreenNew>
                     onTap: () {
                       Navigator.pop(context);
                       _scrollToSection(_appointmentsKey, 'Citas y Consultas');
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.support_agent_rounded,
+                      color: _uagroRed,
+                    ),
+                    title: const Text('Centro de Atención'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, '/atencion');
                     },
                   ),
                   ListTile(

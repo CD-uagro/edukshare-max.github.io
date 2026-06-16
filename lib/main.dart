@@ -9,6 +9,7 @@ import 'package:carnet_digital_uagro/screens/login_screen.dart';
 import 'package:carnet_digital_uagro/screens/register_screen.dart';
 import 'package:carnet_digital_uagro/screens/carnet_selector_screen.dart';
 import 'package:carnet_digital_uagro/screens/vacunas_screen.dart';
+import 'package:carnet_digital_uagro/screens/centro_atencion_screen.dart';
 // import 'package:carnet_digital_uagro/screens/alebrije_screen.dart'; // 🎨 ALEBRIJE DESACTIVADO
 // import 'package:carnet_digital_uagro/screens/minijuego_screen.dart'; // 🎨 ALEBRIJE DESACTIVADO
 import 'package:carnet_digital_uagro/theme/uagro_theme.dart';
@@ -36,6 +37,7 @@ class CarnetDigitalApp extends StatelessWidget {
           '/register': (context) => const RegisterScreen(),
           '/carnet': (context) => const CarnetSelectorScreen(),
           '/vacunas': (context) => const VacunasScreen(),
+          '/atencion': (context) => const CentroAtencionScreen(),
           // '/alebrije': (context) => const AlebrijeScreen(), // 🎨 ALEBRIJE DESACTIVADO
         },
         debugShowCheckedModeBanner: false,
