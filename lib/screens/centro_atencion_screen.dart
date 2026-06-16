@@ -1274,29 +1274,14 @@ class _AttentionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Wrap(
-      spacing: 6,
-      runSpacing: 0,
-      children: [
-        Text(
-          'Centro de',
-          style: TextStyle(
-            color: _uagroBlue,
-            fontSize: 30,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0,
-          ),
-        ),
-        Text(
-          'Atención Universitaria',
-          style: TextStyle(
-            color: _uagroRed,
-            fontSize: 30,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0,
-          ),
-        ),
-      ],
+    return const Text(
+      'Centro de Atención Universitaria',
+      style: TextStyle(
+        color: _uagroBlue,
+        fontSize: 30,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 0,
+      ),
     );
   }
 }
