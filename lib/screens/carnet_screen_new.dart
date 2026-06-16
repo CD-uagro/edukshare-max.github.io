@@ -598,6 +598,24 @@ class _CarnetScreenNewState extends State<CarnetScreenNew>
           ),
         ),
         const SizedBox(height: 14),
+        _InfoPanel(
+          icon: Icons.support_agent_rounded,
+          iconColor: _uagroRed,
+          title: 'Centro de Atención Universitaria',
+          actionText: 'Abrir módulo',
+          initiallyExpanded: compact,
+          onAction: () => Navigator.pushNamed(context, '/atencion'),
+          children: const [
+            _SimpleNotice(
+              icon: Icons.forum_rounded,
+              title: 'Seguimiento de solicitudes',
+              body:
+                  'Consulta tus tickets y crea nuevas solicitudes de atención universitaria.',
+              tinted: true,
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
         KeyedSubtree(
           key: _promotionsKey,
           child: _buildPromotionsPanel(session.promociones),
