@@ -637,6 +637,15 @@ class _TicketDetailSheetState extends State<_TicketDetailSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(
+              'Detalle de ticket',
+              style: TextStyle(
+                color: UAGroColors.primary,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
