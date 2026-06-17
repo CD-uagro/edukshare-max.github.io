@@ -13,6 +13,7 @@ import 'package:carnet_digital_uagro/models/cita_model.dart';
 import 'package:carnet_digital_uagro/models/promocion_salud_model.dart';
 import 'package:carnet_digital_uagro/models/vacuna_model.dart';
 import 'package:carnet_digital_uagro/models/consulta_model.dart';
+import 'package:carnet_digital_uagro/models/appointment_model.dart';
 import 'package:carnet_digital_uagro/models/ticket_model.dart';
 
 class ApiService {
@@ -687,6 +688,152 @@ class ApiService {
   }
 
   // 🏥 OBTENER PROMOCIONES DE SALUD ACTIVAS - BACKEND REAL
+  static Future<List<AppointmentModel>> getAppointments(String token) async {
+    try {
+      final url = Uri.parse('$baseUrl/me/appointments');
+
+      final response = await http
+          .get(
+            url,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(normalTimeout);
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final data = decoded is Map<String, dynamic> ? decoded['data'] : null;
+        if (data is List) {
+          return data
+              .whereType<Map>()
+              .map(
+                (json) =>
+                    AppointmentModel.fromJson(Map<String, dynamic>.from(json)),
+              )
+              .toList();
+        }
+      }
+
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        throw Exception('INVALID_TOKEN: Token invalido o expirado');
+      }
+
+      return [];
+    } catch (e) {
+      if (e.toString().contains('INVALID_TOKEN')) {
+        rethrow;
+      }
+      return [];
+    }
+  }
+
+  static Future<Map<String, dynamic>> createAppointment(
+    String token,
+    CreateAppointmentRequest request,
+  ) async {
+    try {
+      final url = Uri.parse('$baseUrl/me/appointments');
+
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(request.toJson()),
+          )
+          .timeout(normalTimeout);
+
+      final data = _decodeJsonObject(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Solicitud de cita enviada',
+          'data': data['data'],
+        };
+      }
+
+      if (response.statusCode == 409) {
+        return {
+          'success': false,
+          'errorType': 'DUPLICATE',
+          'message': data['message'] ?? 'Ya tienes una cita activa',
+        };
+      }
+
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        throw Exception('INVALID_TOKEN: Token invalido o expirado');
+      }
+
+      return {
+        'success': false,
+        'errorType': 'SERVER_ERROR',
+        'message': data['message'] ?? 'No se pudo solicitar la cita',
+      };
+    } catch (e) {
+      if (e.toString().contains('INVALID_TOKEN')) {
+        rethrow;
+      }
+      return {
+        'success': false,
+        'errorType': 'CONNECTION',
+        'message': 'Error de conexion. Intente mas tarde.',
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> cancelAppointment(
+    String token,
+    String appointmentId, {
+    String reason = '',
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl/me/appointments/$appointmentId/cancel');
+
+      final response = await http
+          .patch(
+            url,
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({'cancellation_reason': reason}),
+          )
+          .timeout(normalTimeout);
+
+      final data = _decodeJsonObject(response.body);
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Cita cancelada',
+          'data': data['data'],
+        };
+      }
+
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        throw Exception('INVALID_TOKEN: Token invalido o expirado');
+      }
+
+      return {
+        'success': false,
+        'statusCode': response.statusCode,
+        'message': data['message'] ?? 'No se pudo cancelar la cita',
+      };
+    } catch (e) {
+      if (e.toString().contains('INVALID_TOKEN')) {
+        rethrow;
+      }
+      return {
+        'success': false,
+        'errorType': 'CONNECTION',
+        'message': 'Error de conexion. Intente mas tarde.',
+      };
+    }
+  }
+
   static Future<List<PromocionSaludModel>> getPromocionesSalud(
     String token,
     String matricula,

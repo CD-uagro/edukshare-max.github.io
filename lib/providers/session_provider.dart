@@ -13,6 +13,7 @@ import 'package:carnet_digital_uagro/models/cita_model.dart';
 import 'package:carnet_digital_uagro/models/promocion_salud_model.dart';
 import 'package:carnet_digital_uagro/models/vacuna_model.dart';
 import 'package:carnet_digital_uagro/models/consulta_model.dart';
+import 'package:carnet_digital_uagro/models/appointment_model.dart';
 import 'package:carnet_digital_uagro/models/ticket_model.dart';
 import 'package:carnet_digital_uagro/services/api_service.dart';
 
@@ -28,6 +29,7 @@ class SessionProvider extends ChangeNotifier {
   List<PromocionSaludModel> _promociones = [];
   List<VacunaModel> _vacunas = [];
   List<ConsultaModel> _consultas = [];
+  List<AppointmentModel> _appointments = [];
   List<TicketModel> _tickets = [];
   Uint8List? _carnetPhotoBytes;
   DateTime? _lastCarnetFetch;
@@ -35,7 +37,10 @@ class SessionProvider extends ChangeNotifier {
   DateTime? _lastPromocionesFetch;
   DateTime? _lastVacunasFetch;
   DateTime? _lastConsultasFetch;
+  DateTime? _lastAppointmentsFetch;
   DateTime? _lastTicketsFetch;
+  bool _isAppointmentsLoading = false;
+  String? _appointmentsError;
   bool _isTicketsLoading = false;
   String? _ticketsError;
 
@@ -61,9 +66,12 @@ class SessionProvider extends ChangeNotifier {
   List<PromocionSaludModel> get promociones => _promociones;
   List<VacunaModel> get vacunas => _vacunas;
   List<ConsultaModel> get consultas => _consultas;
+  List<AppointmentModel> get appointments => _appointments;
   List<TicketModel> get tickets => _tickets;
   Uint8List? get carnetPhotoBytes => _carnetPhotoBytes;
   bool get isTicketsLoading => _isTicketsLoading;
+  bool get isAppointmentsLoading => _isAppointmentsLoading;
+  String? get appointmentsError => _appointmentsError;
   String? get ticketsError => _ticketsError;
   bool get backendHealthy => _backendHealthy;
   String? get backendMessage => _backendMessage;
@@ -228,6 +236,7 @@ class SessionProvider extends ChangeNotifier {
     await _loadCitasData(force: force);
     await _loadVacunasData(force: force);
     await _loadConsultasData(force: force);
+    await loadAppointments(force: force, notifyWhenDone: false);
     await loadPromociones(
       notifyWhenDone: false,
       force: force,
@@ -449,6 +458,135 @@ class SessionProvider extends ChangeNotifier {
     _setLoading(true);
     await _loadCitasData(force: true);
     _setLoading(false);
+  }
+
+  Future<void> loadAppointments({
+    bool force = false,
+    bool notifyWhenDone = true,
+  }) async {
+    if (_token == null || _token!.isEmpty || _token == 'DEMO_TOKEN') {
+      _appointments = [];
+      _appointmentsError = 'Inicia sesion para consultar tus citas.';
+      if (notifyWhenDone) notifyListeners();
+      return;
+    }
+
+    if (!force && _isFresh(_lastAppointmentsFetch)) return;
+
+    _isAppointmentsLoading = true;
+    _appointmentsError = null;
+    if (notifyWhenDone) notifyListeners();
+
+    try {
+      final data = await ApiService.getAppointments(_token!);
+      _appointments = data;
+      _lastAppointmentsFetch = DateTime.now();
+    } catch (e) {
+      if (e.toString().contains('INVALID_TOKEN')) {
+        _appointments = [];
+        _appointmentsError =
+            'No se pudo autenticar la agenda. Tu sesion del carnet sigue activa.';
+      } else {
+        _appointments = [];
+        _appointmentsError = 'No se pudieron cargar tus citas.';
+      }
+    } finally {
+      _isAppointmentsLoading = false;
+      if (notifyWhenDone) notifyListeners();
+    }
+  }
+
+  Future<Map<String, dynamic>> createAppointment({
+    required String area,
+    required String reasonCategory,
+    required String reasonText,
+    required String preferredDate,
+    required String preferredTimeBlock,
+  }) async {
+    if (_token == null || _token!.isEmpty || _token == 'DEMO_TOKEN') {
+      return {
+        'success': false,
+        'errorType': 'NO_TOKEN',
+        'message': 'Inicia sesion para solicitar una cita.',
+      };
+    }
+
+    final request = CreateAppointmentRequest(
+      area: area,
+      reasonCategory: reasonCategory,
+      reasonText: reasonText,
+      preferredDate: preferredDate,
+      preferredTimeBlock: preferredTimeBlock,
+    );
+
+    _isAppointmentsLoading = true;
+    _appointmentsError = null;
+    notifyListeners();
+
+    try {
+      final result = await ApiService.createAppointment(_token!, request);
+      if (result['success'] == true) {
+        final appointmentData = result['data'];
+        if (appointmentData is Map) {
+          final appointment = AppointmentModel.fromJson(
+            Map<String, dynamic>.from(appointmentData),
+          );
+          _appointments = [
+            appointment,
+            ..._appointments.where((item) => item.id != appointment.id),
+          ];
+          _lastAppointmentsFetch = DateTime.now();
+        } else {
+          await loadAppointments(force: true, notifyWhenDone: false);
+        }
+      } else {
+        _appointmentsError = result['message']?.toString();
+      }
+      return result;
+    } catch (e) {
+      _appointmentsError = 'No se pudo solicitar la cita.';
+      return {
+        'success': false,
+        'errorType': 'ERROR',
+        'message': _appointmentsError,
+      };
+    } finally {
+      _isAppointmentsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<Map<String, dynamic>> cancelAppointment(
+    String appointmentId, {
+    String reason = '',
+  }) async {
+    if (_token == null || _token!.isEmpty || _token == 'DEMO_TOKEN') {
+      return {
+        'success': false,
+        'errorType': 'NO_TOKEN',
+        'message': 'Inicia sesion para cancelar una cita.',
+      };
+    }
+
+    _isAppointmentsLoading = true;
+    notifyListeners();
+
+    try {
+      final result = await ApiService.cancelAppointment(
+        _token!,
+        appointmentId,
+        reason: reason,
+      );
+      if (result['success'] == true) {
+        await loadAppointments(force: true, notifyWhenDone: false);
+      } else {
+        _appointmentsError = result['message']?.toString();
+      }
+      return result;
+    } finally {
+      _isAppointmentsLoading = false;
+      notifyListeners();
+    }
   }
 
   // 📋 CARGAR CONSULTAS DE ATENCIÓN - BACKEND REAL SASU
@@ -1037,6 +1175,7 @@ class SessionProvider extends ChangeNotifier {
     _promociones = [];
     _vacunas = [];
     _consultas = [];
+    _appointments = [];
     _tickets = [];
     _carnetPhotoBytes = null;
     _lastCarnetFetch = null;
@@ -1044,7 +1183,10 @@ class SessionProvider extends ChangeNotifier {
     _lastPromocionesFetch = null;
     _lastVacunasFetch = null;
     _lastConsultasFetch = null;
+    _lastAppointmentsFetch = null;
     _lastTicketsFetch = null;
+    _isAppointmentsLoading = false;
+    _appointmentsError = null;
     _isTicketsLoading = false;
     _ticketsError = null;
     _error = null;
@@ -1066,6 +1208,7 @@ class SessionProvider extends ChangeNotifier {
     _promociones = [];
     _vacunas = [];
     _consultas = [];
+    _appointments = [];
     _tickets = [];
     _carnetPhotoBytes = null;
     _lastCarnetFetch = null;
@@ -1073,7 +1216,10 @@ class SessionProvider extends ChangeNotifier {
     _lastPromocionesFetch = null;
     _lastVacunasFetch = null;
     _lastConsultasFetch = null;
+    _lastAppointmentsFetch = null;
     _lastTicketsFetch = null;
+    _isAppointmentsLoading = false;
+    _appointmentsError = null;
     _isTicketsLoading = false;
     _ticketsError = null;
     _error = null;

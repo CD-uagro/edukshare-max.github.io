@@ -8,6 +8,7 @@ import 'package:carnet_digital_uagro/providers/session_provider.dart';
 import 'package:carnet_digital_uagro/screens/login_screen.dart';
 import 'package:carnet_digital_uagro/screens/register_screen.dart';
 import 'package:carnet_digital_uagro/screens/carnet_selector_screen.dart';
+import 'package:carnet_digital_uagro/screens/citas_screen.dart';
 import 'package:carnet_digital_uagro/screens/vacunas_screen.dart';
 import 'package:carnet_digital_uagro/screens/centro_atencion_screen.dart';
 // import 'package:carnet_digital_uagro/screens/alebrije_screen.dart'; // 🎨 ALEBRIJE DESACTIVADO
@@ -31,11 +32,13 @@ class CarnetDigitalApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Carnet Digital UAGro',
         theme: UAGroTheme.lightTheme,
-        home: const SessionRestoreScreen(), // 🔄 Nueva pantalla de splash con restauración
+        home:
+            const SessionRestoreScreen(), // 🔄 Nueva pantalla de splash con restauración
         routes: {
           '/login': (context) => const LoginScreen(),
           '/register': (context) => const RegisterScreen(),
           '/carnet': (context) => const CarnetSelectorScreen(),
+          '/citas': (context) => const CitasScreen(),
           '/vacunas': (context) => const VacunasScreen(),
           '/atencion': (context) => const CentroAtencionScreen(),
           // '/alebrije': (context) => const AlebrijeScreen(), // 🎨 ALEBRIJE DESACTIVADO
@@ -64,14 +67,14 @@ class _SessionRestoreScreenState extends State<SessionRestoreScreen> {
   Future<void> _restoreSession() async {
     // Esperar un momento para mostrar splash
     await Future.delayed(const Duration(milliseconds: 500));
-    
+
     if (!mounted) return;
-    
+
     final sessionProvider = context.read<SessionProvider>();
     final restored = await sessionProvider.restoreSession();
-    
+
     if (!mounted) return;
-    
+
     // Navegar según resultado
     if (restored) {
       Navigator.of(context).pushReplacementNamed('/carnet');
@@ -126,9 +129,9 @@ class _SessionRestoreScreenState extends State<SessionRestoreScreen> {
                   color: Colors.white,
                 ),
               ),
-              
+
               const SizedBox(height: 40),
-              
+
               // Título moderno
               const Text(
                 'Carnet Digital',
@@ -139,9 +142,9 @@ class _SessionRestoreScreenState extends State<SessionRestoreScreen> {
                   letterSpacing: -0.5,
                 ),
               ),
-              
+
               const SizedBox(height: 8),
-              
+
               // Subtítulo
               Text(
                 'Universidad Autónoma de Guerrero',
@@ -152,9 +155,9 @@ class _SessionRestoreScreenState extends State<SessionRestoreScreen> {
                   letterSpacing: 0.3,
                 ),
               ),
-              
+
               const SizedBox(height: 48),
-              
+
               // Indicador de carga moderno
               Container(
                 width: 48,
@@ -175,9 +178,9 @@ class _SessionRestoreScreenState extends State<SessionRestoreScreen> {
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 24),
-              
+
               // Texto de carga
               Text(
                 'Restaurando sesión...',
